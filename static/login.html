@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0b0d10">
+<title>Manager</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body class="login-body">
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="login-logo">M</div>
+    <h1>Manager</h1>
+    <p class="muted">Enter password to continue</p>
+    <form id="login-form">
+      <input type="password" id="login-pw" class="input" placeholder="Password" autocomplete="current-password" autofocus>
+      <div class="err" id="login-err"></div>
+      <button type="submit" class="btn primary">Unlock</button>
+    </form>
+  </div>
+</div>
+<script>
+const form = document.getElementById('login-form');
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const pw = document.getElementById('login-pw').value;
+  document.getElementById('login-err').textContent = '';
+  const r = await fetch('/api/login', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
+  if (r.ok) { location.href = '/'; }
+  else { document.getElementById('login-err').textContent = 'Wrong password'; }
+});
+</script>
+</body>
+</html>

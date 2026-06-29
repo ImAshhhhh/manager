@@ -1,0 +1,9 @@
+venv/
+__pycache__/
+*.pyc
+manager.db
+manager.db-wal
+manager.db-shm
+.env
+app.log
+cf_tunnel.log
