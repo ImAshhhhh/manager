@@ -14,7 +14,7 @@ import time
 import asyncio
 import threading
 import logging
-from telethon import TelegramClient, errors
+from telethon import TelegramClient, events, errors
 
 logger = logging.getLogger(__name__)
 
