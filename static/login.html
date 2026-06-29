@@ -3,32 +3,158 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<meta name="theme-color" content="#0b0d10">
+<meta name="theme-color" content="#0a0c10">
 <title>Manager</title>
-<link rel="stylesheet" href="/style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0c10;
+  --panel:#12151b;
+  --border:#1f242c;
+  --primary:#3b82f6;
+  --primary-d:#2563eb;
+  --text:#e8eaed;
+  --muted:#8a93a0;
+  --red:#ef4444;
+}
+html,body{height:100%}
+body{
+  font-family:'Inter',-apple-system,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  -webkit-font-smoothing:antialiased;
+  overflow:hidden;
+}
+/* Animated gradient background */
+.bg-anim{
+  position:fixed;inset:0;z-index:0;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(59,130,246,.18) 0%, transparent 40%),
+    radial-gradient(circle at 80% 80%, rgba(139,92,246,.14) 0%, transparent 40%),
+    radial-gradient(circle at 50% 50%, rgba(16,185,129,.08) 0%, transparent 50%),
+    var(--bg);
+  animation:bgshift 18s ease-in-out infinite alternate;
+}
+@keyframes bgshift{
+  0%{background-position:0% 0%,100% 100%,50% 50%}
+  100%{background-position:30% 20%,70% 60%,40% 30%}
+}
+/* Floating particles */
+.particles{position:fixed;inset:0;z-index:1;pointer-events:none;overflow:hidden}
+.p{position:absolute;width:4px;height:4px;border-radius:50%;background:rgba(59,130,246,.3);animation:float 14s linear infinite}
+@keyframes float{
+  0%{transform:translateY(110vh) scale(0);opacity:0}
+  10%{opacity:1}
+  90%{opacity:1}
+  100%{transform:translateY(-10vh) scale(1.2);opacity:0}
+}
+.wrap{position:relative;z-index:2;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+.card{
+  background:rgba(18,21,27,.85);backdrop-filter:blur(20px);
+  border:1px solid var(--border);border-radius:18px;
+  padding:40px 32px;text-align:center;width:100%;max-width:380px;
+  box-shadow:0 20px 60px rgba(0,0,0,.5);
+  animation:cardin .7s cubic-bezier(.2,.8,.2,1);
+}
+@keyframes cardin{
+  0%{opacity:0;transform:translateY(20px) scale(.96)}
+  100%{opacity:1;transform:translateY(0) scale(1)}
+}
+.logo{
+  width:64px;height:64px;border-radius:16px;
+  background:linear-gradient(135deg,var(--primary) 0%,#1e40af 100%);
+  display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:28px;color:#fff;
+  margin:0 auto 22px;letter-spacing:-.02em;
+  box-shadow:0 8px 24px rgba(59,130,246,.4);
+  animation:logopulse 3s ease-in-out infinite;
+}
+@keyframes logopulse{
+  0%,100%{box-shadow:0 8px 24px rgba(59,130,246,.4);transform:scale(1)}
+  50%{box-shadow:0 8px 32px rgba(59,130,246,.7);transform:scale(1.04)}
+}
+h1{font-size:24px;font-weight:600;letter-spacing:-.02em;margin-bottom:6px;animation:fadein .8s .2s both}
+@keyframes fadein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.sub{color:var(--muted);font-size:13.5px;margin-bottom:26px;animation:fadein .8s .35s both}
+form{animation:fadein .8s .5s both}
+.input{
+  width:100%;padding:13px 14px;background:rgba(24,28,35,.8);
+  border:1px solid var(--border);border-radius:10px;
+  color:var(--text);font-size:14.5px;outline:none;
+  transition:.2s;margin-bottom:6px;
+  font-family:inherit;
+}
+.input:focus{border-color:var(--primary);background:rgba(29,34,42,1);box-shadow:0 0 0 3px rgba(59,130,246,.15)}
+.err{color:var(--red);font-size:12px;min-height:18px;margin-bottom:8px;transition:.2s}
+.btn{
+  width:100%;padding:13px;background:var(--primary);color:#fff;
+  border:none;border-radius:10px;font-size:15px;font-weight:600;
+  cursor:pointer;transition:.2s;font-family:inherit;
+  position:relative;overflow:hidden;
+}
+.btn:hover{background:var(--primary-d);transform:translateY(-1px);box-shadow:0 6px 18px rgba(59,130,246,.35)}
+.btn:active{transform:translateY(0)}
+/* Ripple */
+.btn::after{
+  content:"";position:absolute;top:50%;left:50%;width:0;height:0;
+  background:rgba(255,255,255,.3);border-radius:50%;transform:translate(-50%,-50%);
+  transition:width .5s,height .5s;
+}
+.btn:active::after{width:300px;height:300px}
+.hint{margin-top:18px;font-size:11.5px;color:var(--muted);animation:fadein .8s .65s both}
+</style>
 </head>
-<body class="login-body">
-<div class="login-wrap">
-  <div class="login-card">
-    <div class="login-logo">M</div>
+<body>
+<div class="bg-anim"></div>
+<div class="particles" id="particles"></div>
+<div class="wrap">
+  <div class="card">
+    <div class="logo">M</div>
     <h1>Manager</h1>
-    <p class="muted">Enter password to continue</p>
+    <p class="sub">Enter password to continue</p>
     <form id="login-form">
       <input type="password" id="login-pw" class="input" placeholder="Password" autocomplete="current-password" autofocus>
       <div class="err" id="login-err"></div>
-      <button type="submit" class="btn primary">Unlock</button>
+      <button type="submit" class="btn">Unlock</button>
     </form>
+    <div class="hint">Default password: <code style="font-family:'JetBrains Mono',monospace;color:#60a5fa">manager123</code></div>
   </div>
 </div>
 <script>
+// particles
+(function(){
+  const p = document.getElementById('particles');
+  for(let i=0;i<24;i++){
+    const d = document.createElement('div');
+    d.className = 'p';
+    d.style.left = Math.random()*100 + '%';
+    d.style.width = d.style.height = (2 + Math.random()*4) + 'px';
+    d.style.animationDelay = (Math.random()*14) + 's';
+    d.style.animationDuration = (10 + Math.random()*10) + 's';
+    d.style.background = `rgba(59,130,246,${0.15 + Math.random()*0.25})`;
+    p.appendChild(d);
+  }
+})();
 const form = document.getElementById('login-form');
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const pw = document.getElementById('login-pw').value;
-  document.getElementById('login-err').textContent = '';
-  const r = await fetch('/api/login', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
-  if (r.ok) { location.href = '/'; }
-  else { document.getElementById('login-err').textContent = 'Wrong password'; }
+  const errEl = document.getElementById('login-err');
+  errEl.textContent = '';
+  const btn = form.querySelector('.btn');
+  btn.disabled = true;
+  btn.textContent = 'Unlocking…';
+  try {
+    const r = await fetch('/api/login', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
+    const d = await r.json();
+    if (r.ok) { location.href = '/'; }
+    else { errEl.textContent = d.error || 'Wrong password'; }
+  } catch (ex) { errEl.textContent = 'Network error'; }
+  btn.disabled = false;
+  btn.textContent = 'Unlock';
 });
 </script>
 </body>

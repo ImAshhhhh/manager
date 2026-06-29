@@ -66,6 +66,8 @@ function switchView(name) {
   renderIcons();
   if (name === 'dashboard') loadDashboard();
   if (name === 'sessions') loadSessions();
+  if (name === 'directlogin') initDirectLogin();
+  if (name === 'reports') initReports();
   if (name === 'bots') loadBots();
   if (name === 'audit') loadAudit();
   if (name === 'settings') loadSettings();
@@ -403,6 +405,219 @@ async function openDetail(id) {
     renderIcons();
   } catch (e) { toast(e.message, 'err'); }
 }
+
+/* ---------- Direct Login ---------- */
+let dlState = { sid: null, phone: null, otpCells: null };
+
+function initDirectLogin() {
+  // reset to first step
+  dlShowStep('phone');
+  $('#dl-phone').value = '';
+  $('#dl-phone-err').textContent = '';
+  $('#dl-otp-err').textContent = '';
+  $('#dl-2fa').value = '';
+  $('#dl-2fa-err').textContent = '';
+  // reset OTP cells
+  $$('.dl-otp-cell').forEach(c => { c.value = ''; c.classList.remove('filled'); });
+  updateDlVerifyBtn();
+  renderIcons();
+  if (window.lucide) lucide.createIcons();
+  setTimeout(() => $('#dl-phone').focus(), 100);
+}
+
+function dlShowStep(name) {
+  $$('.dl-step').forEach(s => s.classList.remove('active'));
+  $('#dl-step-' + name).classList.add('active');
+  renderIcons();
+}
+
+function dlLoading(on) { $('#dl-loading').classList.toggle('active', on); }
+
+function updateDlVerifyBtn() {
+  const code = dlGetOtp();
+  $('#dl-verify').disabled = code.length !== 5;
+}
+
+function dlGetOtp() {
+  return $$('.dl-otp-cell').map(c => c.value).join('');
+}
+
+// OTP cell behavior
+$$('.dl-otp-cell').forEach((c, i) => {
+  c.addEventListener('input', () => {
+    c.value = c.value.replace(/\D/g, '').slice(0, 1);
+    if (c.value) {
+      c.classList.add('filled');
+      if (i < 4) $$('.dl-otp-cell')[i + 1].focus();
+    } else {
+      c.classList.remove('filled');
+    }
+    updateDlVerifyBtn();
+  });
+  c.addEventListener('keydown', e => {
+    if (e.key === 'Backspace' && !c.value && i > 0) {
+      $$('.dl-otp-cell')[i - 1].focus();
+    }
+  });
+  c.addEventListener('paste', e => {
+    e.preventDefault();
+    const txt = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '').slice(0, 5);
+    if (!txt) return;
+    $$('.dl-otp-cell').forEach((cell, idx) => {
+      if (idx < txt.length) {
+        cell.value = txt[idx];
+        cell.classList.add('filled');
+      } else {
+        cell.value = '';
+        cell.classList.remove('filled');
+      }
+    });
+    updateDlVerifyBtn();
+    if (txt.length === 5) $('#dl-verify').focus();
+  });
+});
+
+$('#dl-send').onclick = async () => {
+  const phone = $('#dl-phone').value.trim();
+  if (!phone) { $('#dl-phone-err').textContent = 'Phone number required'; return; }
+  $('#dl-phone-err').textContent = '';
+  dlLoading(true);
+  try {
+    const r = await api('/api/direct-login/send-code', { method: 'POST', body: JSON.stringify({ phone }) });
+    if (r.success) {
+      dlState.sid = r.session_id;
+      dlState.phone = phone.startsWith('+') ? phone : '+' + phone;
+      $('#dl-phone-display').textContent = dlState.phone;
+      dlShowStep('otp');
+      setTimeout(() => $$('.dl-otp-cell')[0].focus(), 200);
+    } else if (r.error) {
+      $('#dl-phone-err').textContent = r.error;
+    }
+  } catch (e) { $('#dl-phone-err').textContent = e.message; }
+  dlLoading(false);
+};
+
+$('#dl-back-phone').onclick = () => {
+  dlShowStep('phone');
+  $('#dl-phone').focus();
+  $('#dl-phone').select();
+};
+
+$('#dl-verify').onclick = async () => {
+  const code = dlGetOtp();
+  if (code.length !== 5) return;
+  $('#dl-otp-err').textContent = '';
+  dlLoading(true);
+  try {
+    const r = await api('/api/direct-login/verify', { method: 'POST', body: JSON.stringify({ session_id: dlState.sid, code }) });
+    if (r.success) {
+      dlShowStep('success');
+      $('#dl-success-name').textContent = r.user?.name || dlState.phone;
+    } else if (r.requires_password) {
+      dlShowStep('2fa');
+      setTimeout(() => $('#dl-2fa').focus(), 200);
+    } else if (r.error) {
+      $('#dl-otp-err').textContent = r.error;
+    }
+  } catch (e) { $('#dl-otp-err').textContent = e.message; }
+  dlLoading(false);
+};
+
+$('#dl-verify-2fa').onclick = async () => {
+  const pw = $('#dl-2fa').value;
+  if (!pw) { $('#dl-2fa-err').textContent = 'Password required'; return; }
+  $('#dl-2fa-err').textContent = '';
+  dlLoading(true);
+  try {
+    const r = await api('/api/direct-login/verify', { method: 'POST', body: JSON.stringify({ session_id: dlState.sid, code: dlGetOtp(), password: pw }) });
+    if (r.success) {
+      dlShowStep('success');
+      $('#dl-success-name').textContent = r.user?.name || dlState.phone;
+    } else if (r.error) {
+      $('#dl-2fa-err').textContent = r.error;
+    }
+  } catch (e) { $('#dl-2fa-err').textContent = e.message; }
+  dlLoading(false);
+};
+
+$('#dl-done').onclick = () => switchView('sessions');
+
+/* ---------- Reports ---------- */
+async function initReports() {
+  renderIcons();
+  // populate session dropdown
+  try {
+    if (!sessionsCache.length) sessionsCache = await api('/api/sessions');
+    const sel = $('#rp-session');
+    sel.innerHTML = sessionsCache.length
+      ? sessionsCache.map(s => `<option value="${s.id}">${s.name || s.phone} — ${s.phone}</option>`).join('')
+      : '<option value="">No sessions available</option>';
+  } catch (e) { toast(e.message, 'err'); }
+
+  // load report history (audit entries with action=report_peer)
+  try {
+    const audit = await api('/api/audit?limit=100');
+    const reports = audit.filter(r => r.action === 'report_peer');
+    $('#rp-history').innerHTML = reports.length
+      ? reports.map(r => `<div class="audit-row"><div class="ts">${fmtTs(r.ts)}</div><div class="act">report</div><div class="det">${r.phone || '—'} ${r.detail || ''}</div></div>`).join('')
+      : `<div class="empty"><i data-lucide="flag"></i><div>No reports yet.</div></div>`;
+    renderIcons();
+  } catch (e) { /* ignore */ }
+
+  $('#rp-err').textContent = '';
+  $('#rp-resolve-result').textContent = '';
+  $('#rp-resolve-result').className = 'muted sm';
+}
+
+$('#rp-resolve').onclick = async () => {
+  const sid = $('#rp-session').value;
+  const peer = $('#rp-peer').value.trim();
+  const out = $('#rp-resolve-result');
+  if (!sid || !peer) { out.textContent = 'Select session and enter peer'; out.className = 'muted sm err'; return; }
+  out.textContent = 'Resolving…';
+  out.className = 'muted sm';
+  try {
+    const r = await api(`/api/sessions/${sid}/resolve-peer`, { method: 'POST', body: JSON.stringify({ peer }) });
+    if (r.error) { out.textContent = r.error; out.className = 'muted sm err'; }
+    else if (r.ok) {
+      const info = r.info || {};
+      out.textContent = info.id ? `✓ ${info.name || ''} ${info.username ? '@' + info.username : ''} (ID: ${info.id})` : '✓ Resolved';
+      out.className = 'muted sm ok';
+    }
+  } catch (e) { out.textContent = e.message; out.className = 'muted sm err'; }
+};
+
+$('#rp-submit').onclick = async () => {
+  const sid = $('#rp-session').value;
+  const peer = $('#rp-peer').value.trim();
+  const reason = $('#rp-reason').value;
+  const message = $('#rp-message').value.trim();
+  $('#rp-err').textContent = '';
+  if (!sid) { $('#rp-err').textContent = 'Select a session'; return; }
+  if (!peer) { $('#rp-err').textContent = 'Enter a target peer'; return; }
+  if (!confirm(`Report "${peer}" for ${reason} using session #${sid}?\nThis action is irreversible.`)) return;
+  const btn = $('#rp-submit');
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i data-lucide="loader-2" style="animation:spin 1s linear infinite"></i><span>Reporting…</span>';
+  renderIcons();
+  try {
+    const r = await api(`/api/sessions/${sid}/report-peer`, { method: 'POST', body: JSON.stringify({ peer, reason, message }) });
+    if (r.success) {
+      toast(`Reported ${peer} (${reason})`, 'ok');
+      $('#rp-peer').value = '';
+      $('#rp-message').value = '';
+      $('#rp-resolve-result').textContent = '';
+      // refresh history
+      initReports();
+    } else if (r.error) {
+      $('#rp-err').textContent = r.error;
+    }
+  } catch (e) { $('#rp-err').textContent = e.message; }
+  btn.disabled = false;
+  btn.innerHTML = orig;
+  renderIcons();
+};
 
 /* ---------- bots ---------- */
 async function loadBots() {

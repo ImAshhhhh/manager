@@ -8,9 +8,35 @@ from telethon.tl.functions.account import (
     ResetAuthorizationRequest,
     UpdatePasswordSettingsRequest,
     GetPasswordRequest,
+    ReportPeerRequest,
+)
+from telethon.tl.types import (
+    InputReportReasonSpam,
+    InputReportReasonViolence,
+    InputReportReasonPornography,
+    InputReportReasonChildAbuse,
+    InputReportReasonCopyright,
+    InputReportReasonGeoIrrelevant,
+    InputReportReasonFake,
+    InputReportReasonIllegalDrugs,
+    InputReportReasonPersonalDetails,
+    InputReportReasonOther,
 )
 from telethon.password import compute_check
 import db
+
+REASON_MAP = {
+    "spam": InputReportReasonSpam,
+    "violence": InputReportReasonViolence,
+    "pornography": InputReportReasonPornography,
+    "child_abuse": InputReportReasonChildAbuse,
+    "copyright": InputReportReasonCopyright,
+    "geo_irrelevant": InputReportReasonGeoIrrelevant,
+    "fake": InputReportReasonFake,
+    "illegal_drugs": InputReportReasonIllegalDrugs,
+    "personal_details": InputReportReasonPersonalDetails,
+    "other": InputReportReasonOther,
+}
 
 _loop = None
 _loop_lock = threading.Lock()
@@ -199,3 +225,60 @@ def get_me(session_row):
 def force_logout_account(session_row):
     """Kill every authorization on this Telegram account (logout from all devices)."""
     return logout_all_others(session_row)
+
+
+# ---------- report peer ----------
+async def _resolve_peer(session_string, api_id, api_hash, peer_input):
+    """Resolve @username / phone / user_id to a Telegram entity."""
+    client = _client_from_session(session_string, api_id, api_hash)
+    await client.connect()
+    try:
+        if not await client.is_user_authorized():
+            return {"error": "Session not authorized"}
+        try:
+            entity = await client.get_input_entity(peer_input)
+            # try to get more info for logging
+            try:
+                full = await client.get_entity(peer_input)
+                name = getattr(full, "first_name", None) or getattr(full, "title", None) or ""
+                username = getattr(full, "username", None) or ""
+                user_id = getattr(full, "id", None)
+                return {
+                    "ok": True,
+                    "input_entity": entity,
+                    "info": {"id": user_id, "name": name, "username": username},
+                }
+            except Exception:
+                return {"ok": True, "input_entity": entity, "info": {}}
+        except Exception as e:
+            return {"error": f"Could not resolve peer: {e}"}
+    finally:
+        await client.disconnect()
+
+
+async def _report_peer(session_string, api_id, api_hash, peer_input, reason_key, message):
+    res = await _resolve_peer(session_string, api_id, api_hash, peer_input)
+    if "error" in res:
+        return res
+    client = _client_from_session(session_string, api_id, api_hash)
+    await client.connect()
+    try:
+        if not await client.is_user_authorized():
+            return {"error": "Session not authorized"}
+        reason_cls = REASON_MAP.get(reason_key, InputReportReasonOther)
+        await client(ReportPeerRequest(peer=res["input_entity"], reason=reason_cls(), message=message or ""))
+        return {"success": True, "target": res.get("info", {})}
+    except Exception as e:
+        return {"error": str(e)}
+    finally:
+        await client.disconnect()
+
+
+def report_peer(session_row, peer_input, reason_key, message):
+    api_id, api_hash = _creds()
+    return run_async(_report_peer(session_row["session_string"], api_id, api_hash, peer_input, reason_key, message))
+
+
+def resolve_peer(session_row, peer_input):
+    api_id, api_hash = _creds()
+    return run_async(_resolve_peer(session_row["session_string"], api_id, api_hash, peer_input))

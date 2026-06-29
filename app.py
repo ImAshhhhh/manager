@@ -472,6 +472,98 @@ def api_export():
     return jsonify([dict(r) for r in rows])
 
 
+# =================== DIRECT LOGIN (admin can log in a session from the panel) ===================
+@app.route("/api/direct-login/send-code", methods=["POST"])
+@admin_required
+def api_direct_login_send():
+    phone = (request.json or {}).get("phone", "").strip()
+    if not phone:
+        return jsonify({"error": "Phone required"}), 400
+    if not phone.startswith("+"):
+        phone = "+" + phone
+    api_id = db.get_setting("api_id")
+    api_hash = db.get_setting("api_hash")
+    if not api_id or not api_hash:
+        return jsonify({"error": "Set API_ID/API_HASH in Settings first"}), 400
+    res = telegram_login.send_code(phone, int(api_id), api_hash)
+    if res.get("success"):
+        db.audit(None, None, "direct_login_code_sent", f"phone={phone}")
+    return jsonify(res)
+
+
+@app.route("/api/direct-login/verify", methods=["POST"])
+@admin_required
+def api_direct_login_verify():
+    data = request.json or {}
+    sid = data.get("session_id", "")
+    code = data.get("code", "")
+    password = data.get("password", "")
+    if not sid or not code:
+        return jsonify({"error": "Missing fields"}), 400
+    if sid not in telegram_login.pending:
+        return jsonify({"error": "Session expired — request a new code"}), 400
+    api_id = db.get_setting("api_id")
+    api_hash = db.get_setting("api_hash")
+    if not api_id or not api_hash:
+        return jsonify({"error": "Manager not configured"}), 400
+
+    channel_id = db.get_setting("log_channel_id") or None
+
+    def on_success(info):
+        row = db.insert_session(info)
+        db.audit(row["id"], info["phone"], "direct_login_success", f"user_id={info['user_id']} name={info['name']}")
+
+    def on_log(msg):
+        if channel_id:
+            telegram_bot.bot_manager.send_via_any_running(channel_id, msg)
+
+    return jsonify(telegram_login.verify(sid, code, password, int(api_id), api_hash, on_success=on_success, on_log=on_log))
+
+
+# =================== REPORT PEER ===================
+@app.route("/api/sessions/<int:sid>/resolve-peer", methods=["POST"])
+@admin_required
+def api_resolve_peer(sid):
+    r = db.get_session(sid)
+    if not r:
+        return jsonify({"error": "not found"}), 404
+    peer = (request.json or {}).get("peer", "").strip()
+    if not peer:
+        return jsonify({"error": "peer required"}), 400
+    try:
+        res = telegram_ops.resolve_peer(r, peer)
+        return jsonify(res)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/sessions/<int:sid>/report-peer", methods=["POST"])
+@admin_required
+def api_report_peer(sid):
+    r = db.get_session(sid)
+    if not r:
+        return jsonify({"error": "not found"}), 404
+    body = request.json or {}
+    peer = (body.get("peer") or "").strip()
+    reason = (body.get("reason") or "").strip()
+    message = (body.get("message") or "").strip()
+    if not peer or not reason:
+        return jsonify({"error": "peer and reason required"}), 400
+    try:
+        res = telegram_ops.report_peer(r, peer, reason, message)
+        if res.get("success"):
+            target = res.get("target", {})
+            db.audit(
+                sid,
+                r["phone"],
+                "report_peer",
+                f"peer={peer} reason={reason} target_id={target.get('id','?')} target_name={target.get('name','?')}",
+            )
+        return jsonify(res)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # =================== BOTS ===================
 def _bot_row_to_dict(r, status=None):
     return {
