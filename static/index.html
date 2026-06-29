@@ -3,8 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<meta name="theme-color" content="#0b0d10">
+<meta name="theme-color" content="#0a0c10">
 <title>Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -15,29 +18,46 @@
       <div class="brand-name">Manager</div>
     </div>
     <nav>
-      <a class="nav-item active" data-view="dashboard">Dashboard</a>
-      <a class="nav-item" data-view="sessions">Sessions</a>
-      <a class="nav-item" data-view="audit">Activity</a>
-      <a class="nav-item" data-view="settings">Settings</a>
+      <a class="nav-item active" data-view="dashboard"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></a>
+      <a class="nav-item" data-view="sessions"><i data-lucide="smartphone"></i><span>Sessions</span></a>
+      <a class="nav-item" data-view="bots"><i data-lucide="bot"></i><span>Bots</span></a>
+      <a class="nav-item" data-view="audit"><i data-lucide="activity"></i><span>Activity</span></a>
+      <a class="nav-item" data-view="settings"><i data-lucide="settings"></i><span>Settings</span></a>
     </nav>
     <div class="side-foot">
-      <button class="btn ghost" id="btn-logout">Logout</button>
+      <button class="btn ghost" id="btn-logout"><i data-lucide="log-out"></i><span>Logout</span></button>
     </div>
   </aside>
 
   <main class="main">
     <header class="topbar">
-      <button class="hamb" id="hamb" aria-label="menu">☰</button>
+      <button class="hamb" id="hamb" aria-label="menu"><i data-lucide="menu"></i></button>
       <div class="topbar-title" id="topbar-title">Dashboard</div>
       <div class="topbar-spacer"></div>
-      <button class="btn ghost sm" id="btn-refresh" title="Refresh">↻</button>
+      <button class="btn ghost sm" id="btn-refresh" title="Refresh"><i data-lucide="refresh-cw"></i></button>
     </header>
 
     <section class="view" id="view-dashboard">
       <div class="stats" id="stats"></div>
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-h">
+            <span><i data-lucide="link" class="ic"></i> Miniapp URL</span>
+            <span id="miniapp-status" class="badge">—</span>
+          </div>
+          <div id="miniapp-banner"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-h">
+            <span><i data-lucide="bot" class="ic"></i> Bots Overview</span>
+            <a class="link" data-view="bots">Manage →</a>
+          </div>
+          <div id="bots-overview"></div>
+        </div>
+      </div>
       <div class="panel">
         <div class="panel-h">
-          <span>Recent Sessions</span>
+          <span><i data-lucide="clock" class="ic"></i> Recent Sessions</span>
           <a class="link" data-view="sessions">View all →</a>
         </div>
         <div id="recent-list" class="card-list"></div>
@@ -46,7 +66,10 @@
 
     <section class="view hidden" id="view-sessions">
       <div class="toolbar">
-        <input type="text" id="search" class="input" placeholder="Search phone, name, username…">
+        <div class="search-wrap">
+          <i data-lucide="search" class="search-ic"></i>
+          <input type="text" id="search" class="input" placeholder="Search phone, name, username…">
+        </div>
         <select id="filter-2fa" class="input sm">
           <option value="">All 2FA</option>
           <option value="yes">2FA set</option>
@@ -57,21 +80,29 @@
           <option value="yes">Protected</option>
           <option value="no">Unprotected</option>
         </select>
-        <button class="btn ghost sm" id="btn-export">Export JSON</button>
+        <button class="btn ghost sm" id="btn-export"><i data-lucide="download"></i><span>Export</span></button>
       </div>
       <div class="card-list" id="session-list"></div>
     </section>
 
+    <section class="view hidden" id="view-bots">
+      <div class="toolbar">
+        <div></div>
+        <button class="btn primary sm" id="btn-add-bot"><i data-lucide="plus"></i><span>Add Bot</span></button>
+      </div>
+      <div class="card-list" id="bot-list"></div>
+    </section>
+
     <section class="view hidden" id="view-audit">
       <div class="panel">
-        <div class="panel-h"><span>Activity Log</span></div>
+        <div class="panel-h"><span><i data-lucide="activity" class="ic"></i> Activity Log</span></div>
         <div id="audit-list" class="audit-list"></div>
       </div>
     </section>
 
     <section class="view hidden" id="view-settings">
       <div class="panel">
-        <div class="panel-h"><span>Auto-Logout</span></div>
+        <div class="panel-h"><span><i data-lucide="shield" class="ic"></i> Auto-Logout</span></div>
         <div class="row">
           <div>
             <div class="label">Enable 24h auto-logout for new sessions</div>
@@ -89,22 +120,23 @@
       </div>
 
       <div class="panel">
-        <div class="panel-h"><span>Telegram API</span></div>
+        <div class="panel-h"><span><i data-lucide="key" class="ic"></i> Telegram API</span></div>
         <label class="label">API ID</label>
         <input type="text" id="set-api-id" class="input">
         <label class="label">API Hash</label>
         <input type="text" id="set-api-hash" class="input">
-        <label class="label">Bot Token</label>
+        <label class="label">Bot Token (primary bot)</label>
         <input type="text" id="set-bot-token" class="input">
+        <div class="muted sm" style="margin-top:4px">Changing this restarts the primary bot with a fresh session. Add more bots in the Bots tab.</div>
         <label class="label">Log Channel ID</label>
         <input type="text" id="set-log-channel" class="input">
       </div>
 
       <div class="panel">
-        <div class="panel-h"><span>Admin Password</span></div>
+        <div class="panel-h"><span><i data-lucide="lock" class="ic"></i> Admin Password</span></div>
         <label class="label">New password</label>
         <input type="password" id="set-pw" class="input" placeholder="Leave blank to keep current">
-        <button class="btn primary" id="btn-save-settings">Save Settings</button>
+        <button class="btn primary" id="btn-save-settings"><i data-lucide="save"></i><span>Save Settings</span></button>
       </div>
     </section>
   </main>
@@ -114,12 +146,12 @@
 <div class="modal hidden" id="modal-devices">
   <div class="modal-card">
     <div class="modal-h">
-      <span>Devices — <b id="dev-phone"></b></span>
-      <button class="x" data-close>×</button>
+      <span><i data-lucide="monitor-smartphone" class="ic"></i> Devices — <b id="dev-phone"></b></span>
+      <button class="x" data-close><i data-lucide="x"></i></button>
     </div>
     <div class="modal-body" id="dev-body"></div>
     <div class="modal-f">
-      <button class="btn danger" id="btn-logout-others">Logout all others</button>
+      <button class="btn danger" id="btn-logout-others"><i data-lucide="log-out"></i><span>Logout all others</span></button>
       <button class="btn ghost" data-close>Close</button>
     </div>
   </div>
@@ -129,8 +161,8 @@
 <div class="modal hidden" id="modal-2fa">
   <div class="modal-card">
     <div class="modal-h">
-      <span>2FA — <b id="fa-phone"></b></span>
-      <button class="x" data-close>×</button>
+      <span><i data-lucide="shield-check" class="ic"></i> 2FA — <b id="fa-phone"></b></span>
+      <button class="x" data-close><i data-lucide="x"></i></button>
     </div>
     <div class="modal-body" id="fa-body">
       <div id="fa-status" class="muted">Checking status…</div>
@@ -145,7 +177,7 @@
       <div class="err" id="fa-err"></div>
     </div>
     <div class="modal-f">
-      <button class="btn primary" id="btn-set-2fa">Set 2FA</button>
+      <button class="btn primary" id="btn-set-2fa"><i data-lucide="save"></i><span>Set 2FA</span></button>
       <button class="btn ghost" data-close>Close</button>
     </div>
   </div>
@@ -155,15 +187,15 @@
 <div class="modal hidden" id="modal-mail">
   <div class="modal-card">
     <div class="modal-h">
-      <span>Email — <b id="mail-phone"></b></span>
-      <button class="x" data-close>×</button>
+      <span><i data-lucide="mail" class="ic"></i> Email — <b id="mail-phone"></b></span>
+      <button class="x" data-close><i data-lucide="x"></i></button>
     </div>
     <div class="modal-body">
       <label class="label">Email address</label>
       <input type="email" id="mail-input" class="input">
     </div>
     <div class="modal-f">
-      <button class="btn primary" id="btn-save-mail">Save</button>
+      <button class="btn primary" id="btn-save-mail"><i data-lucide="save"></i><span>Save</span></button>
       <button class="btn ghost" data-close>Close</button>
     </div>
   </div>
@@ -173,8 +205,8 @@
 <div class="modal hidden" id="modal-detail">
   <div class="modal-card">
     <div class="modal-h">
-      <span>Session — <b id="d-phone"></b></span>
-      <button class="x" data-close>×</button>
+      <span><i data-lucide="info" class="ic"></i> Session — <b id="d-phone"></b></span>
+      <button class="x" data-close><i data-lucide="x"></i></button>
     </div>
     <div class="modal-body" id="d-body"></div>
     <div class="modal-f">
@@ -183,7 +215,30 @@
   </div>
 </div>
 
+<!-- Add Bot modal -->
+<div class="modal hidden" id="modal-addbot">
+  <div class="modal-card">
+    <div class="modal-h">
+      <span><i data-lucide="bot" class="ic"></i> Add Bot</span>
+      <button class="x" data-close><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <label class="label">Bot name</label>
+      <input type="text" id="addbot-name" class="input" placeholder="My Second Bot">
+      <label class="label">Bot Token (from @BotFather)</label>
+      <input type="text" id="addbot-token" class="input" placeholder="123456:ABC-DEF...">
+      <div class="err" id="addbot-err"></div>
+      <div class="muted sm" style="margin-top:8px">Uses the same API_ID/API_HASH as your primary bot. Each bot has its own session file and contact list. All bots share the same Manager dashboard.</div>
+    </div>
+    <div class="modal-f">
+      <button class="btn primary" id="btn-confirm-addbot"><i data-lucide="plus"></i><span>Add & Start</span></button>
+      <button class="btn ghost" data-close>Close</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

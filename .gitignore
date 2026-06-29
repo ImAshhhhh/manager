@@ -7,6 +7,7 @@ manager.db-shm
 .env
 .secret_key
 bot_session*
+bot_sessions/
 app.log
 cf_tunnel.log
 cf_manager.log

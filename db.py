@@ -56,6 +56,19 @@ def init_db():
             key TEXT PRIMARY KEY,
             value TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS bots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            bot_token TEXT UNIQUE NOT NULL,
+            api_id TEXT,
+            api_hash TEXT,
+            session_file TEXT,
+            enabled INTEGER DEFAULT 1,
+            is_primary INTEGER DEFAULT 0,
+            created_at INTEGER,
+            last_seen INTEGER
+        );
         """
     )
 
@@ -214,3 +227,73 @@ def list_audit(limit=100):
     return get_conn().execute(
         "SELECT * FROM audit_log ORDER BY ts DESC LIMIT ?", (limit,)
     ).fetchall()
+
+
+# ---------- bots ----------
+def list_bots():
+    return get_conn().execute("SELECT * FROM bots ORDER BY is_primary DESC, created_at ASC").fetchall()
+
+
+def get_bot(bot_id):
+    return get_conn().execute("SELECT * FROM bots WHERE id = ?", (bot_id,)).fetchone()
+
+
+def get_bot_by_token(token):
+    return get_conn().execute("SELECT * FROM bots WHERE bot_token = ?", (token,)).fetchone()
+
+
+def get_primary_bot():
+    return get_conn().execute("SELECT * FROM bots WHERE is_primary = 1").fetchone()
+
+
+def insert_bot(name, token, api_id=None, api_hash=None, is_primary=False, session_file=None):
+    now = int(time.time())
+    if not session_file:
+        session_file = f"bot_session_{now}_{secrets_token(4)}"
+    c = get_conn().execute(
+        """
+        INSERT INTO bots(name, bot_token, api_id, api_hash, session_file, enabled, is_primary, created_at, last_seen)
+        VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)
+        """,
+        (name, token, api_id, api_hash, session_file, 1 if is_primary else 0, now, now),
+    )
+    get_conn().commit()
+    bot_id = c.lastrowid
+    audit(None, None, "bot_added", f"name={name} id={bot_id} primary={is_primary}")
+    return get_bot(bot_id)
+
+
+def update_bot(bot_id, fields):
+    if not fields:
+        return
+    cols = ", ".join(f"{k} = ?" for k in fields)
+    vals = list(fields.values()) + [bot_id]
+    get_conn().execute(f"UPDATE bots SET {cols} WHERE id = ?", vals)
+    get_conn().commit()
+
+
+def delete_bot(bot_id):
+    row = get_bot(bot_id)
+    if row and row["is_primary"]:
+        return False  # cannot delete primary
+    if row:
+        get_conn().execute("DELETE FROM bots WHERE id = ?", (bot_id,))
+        get_conn().commit()
+        audit(None, None, "bot_removed", f"name={row['name']} id={bot_id}")
+    return True
+
+
+def set_primary_bot(bot_id):
+    get_conn().execute("UPDATE bots SET is_primary = 0")
+    update_bot(bot_id, {"is_primary": 1})
+    row = get_bot(bot_id)
+    audit(None, None, "bot_primary_set", f"name={row['name'] if row else '?'} id={bot_id}")
+
+
+def touch_bot_last_seen(bot_id):
+    update_bot(bot_id, {"last_seen": int(time.time())})
+
+
+def secrets_token(n=8):
+    import secrets as _s
+    return _s.token_hex(n)

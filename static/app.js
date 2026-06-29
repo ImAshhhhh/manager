@@ -1,10 +1,15 @@
 /* Manager — frontend logic */
 const API = '';
 let sessionsCache = [];
+let botsCache = [];
 
 /* ---------- helpers ---------- */
 const $ = (s, p = document) => p.querySelector(s);
 const $$ = (s, p = document) => [...p.querySelectorAll(s)];
+
+function renderIcons() {
+  if (window.lucide) lucide.createIcons();
+}
 
 function toast(msg, kind = '') {
   const t = $('#toast');
@@ -47,7 +52,7 @@ function fmtCountdown(ts) {
   return `${h}h ${m}m`;
 }
 
-function openModal(id) { $('#' + id).classList.remove('hidden'); }
+function openModal(id) { $('#' + id).classList.remove('hidden'); renderIcons(); }
 function closeModal(id) { $('#' + id).classList.add('hidden'); }
 $$('[data-close]').forEach(b => b.onclick = () => b.closest('.modal').classList.add('hidden'));
 
@@ -58,8 +63,10 @@ function switchView(name) {
   $$('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.view === name));
   $('#topbar-title').textContent = name.charAt(0).toUpperCase() + name.slice(1);
   $('#sidebar').classList.remove('open');
+  renderIcons();
   if (name === 'dashboard') loadDashboard();
   if (name === 'sessions') loadSessions();
+  if (name === 'bots') loadBots();
   if (name === 'audit') loadAudit();
   if (name === 'settings') loadSettings();
 }
@@ -77,48 +84,69 @@ async function loadDashboard() {
   try {
     const d = await api('/api/dashboard');
     const cards = [
-      { k: 'Total Sessions', v: d.total, cls: '' },
-      { k: 'New Today', v: d.today, cls: 'ok' },
-      { k: 'Protected', v: d.protected, cls: '' },
-      { k: '2FA Stored', v: d.has_2fa_pw, cls: '' },
-      { k: 'Pending Auto-Logout', v: d.pending_auto_logout, cls: 'warn' },
-      { k: 'Auto-Logout', v: d.auto_logout_enabled ? 'ON' : 'OFF', cls: d.auto_logout_enabled ? 'bad' : '' },
-      { k: 'Bot', v: d.bot_running ? 'Online' : 'Off', cls: d.bot_running ? 'ok' : 'bad' },
+      { k: 'Sessions', v: d.total, cls: 'blue', icon: 'smartphone' },
+      { k: 'New Today', v: d.today, cls: 'ok', icon: 'sparkles' },
+      { k: 'Protected', v: d.protected, cls: '', icon: 'shield' },
+      { k: '2FA Stored', v: d.has_2fa_pw, cls: '', icon: 'key-round' },
+      { k: 'Pending Auto-LO', v: d.pending_auto_logout, cls: 'warn', icon: 'timer' },
+      { k: 'Auto-Logout', v: d.auto_logout_enabled ? 'ON' : 'OFF', cls: d.auto_logout_enabled ? 'bad' : '', icon: 'power' },
+      { k: 'Bots Online', v: `${d.bots_running}/${d.bots_total}`, cls: d.bots_running > 0 ? 'ok' : 'bad', icon: 'bot' },
+      { k: 'Contacts', v: d.contacts_total, cls: '', icon: 'contact' },
     ];
     $('#stats').innerHTML = cards.map(c => `<div class="stat ${c.cls}"><div class="v">${c.v}</div><div class="k">${c.k}</div></div>`).join('');
 
-    // miniapp URL banner
-    let banner = $('#miniapp-banner');
-    if (!banner) {
-      banner = document.createElement('div');
-      banner.id = 'miniapp-banner';
-      banner.className = 'panel';
-      $('#view-dashboard').insertBefore(banner, $('#stats').nextSibling);
-    }
+    // miniapp banner
+    const banner = $('#miniapp-banner');
+    const status = $('#miniapp-status');
     if (d.miniapp_url && d.miniapp_url !== '/m/') {
+      status.className = 'badge green';
+      status.textContent = 'Ready';
       banner.innerHTML = `
-        <div class="panel-h"><span>Miniapp URL</span><span class="badge blue">Set in BotFather</span></div>
-        <div class="copy-box" style="position:relative">
-          <button class="btn sm ghost" id="copy-miniapp" style="position:absolute;top:4px;right:4px">Copy</button>
+        <div class="miniapp-url">
+          <button class="btn sm ghost" id="copy-miniapp" style="position:absolute;top:4px;right:4px"><i data-lucide="copy"></i></button>
           ${d.miniapp_url}
         </div>
-        <div class="muted sm" style="margin-top:8px">In @BotFather → /mybots → select bot → Bot Settings → Menu Button → configure Web App URL to the above.</div>
+        <div class="muted sm" style="margin-top:8px">In @BotFather → /mybots → select bot → Bot Settings → Menu Button → set Web App URL to the above.</div>
       `;
       $('#copy-miniapp').onclick = () => { navigator.clipboard.writeText(d.miniapp_url); toast('Copied', 'ok'); };
     } else {
-      banner.innerHTML = `
-        <div class="panel-h"><span>Miniapp URL</span><span class="badge yellow">Not configured</span></div>
-        <div class="muted sm">Run with <code>USE_TUNNEL=1 ./start.sh</code> to expose via Cloudflare, or set <code>MINI_APP_URL</code> in <code>.env</code>. Then point BotFather's Web App URL to <code>&lt;that-url&gt;/m/</code>.</div>
-      `;
+      status.className = 'badge yellow';
+      status.textContent = 'Not configured';
+      banner.innerHTML = `<div class="muted sm">Run with <code>USE_TUNNEL=1 ./start.sh</code> or set <code>MINI_APP_URL</code> in <code>.env</code>. Then point BotFather's Web App URL to <code>&lt;that-url&gt;/m/</code>.</div>`;
     }
+
+    // bots overview
+    let botsHtml = '';
+    try {
+      const bots = await api('/api/bots');
+      botsCache = bots;
+      if (!bots.length) {
+        botsHtml = `<div class="muted sm" style="padding:8px 0">No bots yet. Add one in the Bots tab.</div>`;
+      } else {
+        botsHtml = bots.slice(0, 4).map(b => `
+          <div class="bot-mini-row">
+            <div class="bot-mini-name">
+              <span class="badge ${b.status.running ? 'green' : 'red'}"><span class="dot"></span>${b.status.running ? 'Online' : 'Off'}</span>
+              ${b.name}${b.is_primary ? '<span class="badge blue">Primary</span>' : ''}
+            </div>
+            <div class="bot-mini-stats">
+              <span>${b.status.contacts_count || 0} contacts</span>
+              <span>${b.bot_token_masked}</span>
+            </div>
+          </div>
+        `).join('');
+      }
+    } catch (e) { botsHtml = `<div class="muted sm">${e.message}</div>`; }
+    $('#bots-overview').innerHTML = botsHtml;
 
     const list = sessionsCache.length ? sessionsCache : await api('/api/sessions');
     sessionsCache = list;
     const recent = list.slice(0, 5);
     $('#recent-list').innerHTML = recent.length
       ? recent.map(scardHTML).join('')
-      : `<div class="muted" style="padding:20px;text-align:center">No sessions yet. Users who verify via the miniapp will appear here.</div>`;
+      : `<div class="empty"><i data-lucide="inbox"></i><div>No sessions yet. Users who verify via the miniapp will appear here.</div></div>`;
     bindScardActions();
+    renderIcons();
   } catch (e) { toast(e.message, 'err'); }
 }
 
@@ -144,8 +172,9 @@ function renderSessions() {
   });
   $('#session-list').innerHTML = filtered.length
     ? filtered.map(scardHTML).join('')
-    : `<div class="muted" style="padding:20px;text-align:center">No matching sessions.</div>`;
+    : `<div class="empty"><i data-lucide="search-x"></i><div>No matching sessions.</div></div>`;
   bindScardActions();
+  renderIcons();
 }
 
 $('#search').oninput = renderSessions;
@@ -158,8 +187,8 @@ function scardHTML(s) {
   if (s.is_current) badges.push('<span class="badge blue">Current</span>');
   if (s.is_protected) badges.push('<span class="badge green">Protected</span>');
   if (s.has_2fa_pw) badges.push('<span class="badge yellow">2FA</span>');
-  if (s.email) badges.push(`<span class="badge">✉ ${s.email}</span>`);
-  if (s.auto_logout_at && !s.auto_logout_fired) badges.push(`<span class="badge orange">Auto-LO: ${fmtCountdown(s.auto_logout_at)}</span>`);
+  if (s.email) badges.push(`<span class="badge purple">${s.email}</span>`);
+  if (s.auto_logout_at && !s.auto_logout_fired) badges.push(`<span class="badge orange">Auto-LO ${fmtCountdown(s.auto_logout_at)}</span>`);
   if (s.auto_logout_fired) badges.push('<span class="badge red">Auto-LO fired</span>');
   return `
   <div class="scard" data-id="${s.id}">
@@ -174,19 +203,19 @@ function scardHTML(s) {
       <div class="badges">${badges.join('')}</div>
     </div>
     <div class="scard-meta">
-      <span>Created ${fmtRelative(s.created_at)}</span>
-      <span>Last seen ${fmtRelative(s.last_seen)}</span>
-      ${s.last_action ? `<span>Last: ${s.last_action}</span>` : ''}
+      <span class="item"><i data-lucide="clock"></i> ${fmtRelative(s.created_at)}</span>
+      <span class="item"><i data-lucide="eye"></i> ${fmtRelative(s.last_seen)}</span>
+      ${s.last_action ? `<span class="item"><i data-lucide="zap"></i> ${s.last_action}</span>` : ''}
     </div>
     <div class="scard-actions">
-      <button class="btn sm" data-act="devices">Devices</button>
-      <button class="btn sm" data-act="2fa">2FA</button>
-      <button class="btn sm" data-act="mail">Email</button>
-      <button class="btn sm ${s.is_protected ? 'primary' : 'ghost'}" data-act="protect">${s.is_protected ? 'Protected ✓' : 'Protect'}</button>
-      <button class="btn sm ${s.is_current ? 'primary' : 'ghost'}" data-act="current">${s.is_current ? 'Current ✓' : 'Set Current'}</button>
-      <button class="btn sm" data-act="detail">Details</button>
-      <button class="btn sm danger" data-act="force">Force Logout</button>
-      <button class="btn sm ghost" data-act="delete">Delete</button>
+      <button class="btn sm" data-act="devices"><i data-lucide="monitor-smartphone"></i><span>Devices</span></button>
+      <button class="btn sm" data-act="2fa"><i data-lucide="shield-check"></i><span>2FA</span></button>
+      <button class="btn sm" data-act="mail"><i data-lucide="mail"></i><span>Email</span></button>
+      <button class="btn sm ${s.is_protected ? 'primary' : 'ghost'}" data-act="protect"><i data-lucide="shield"></i><span>${s.is_protected ? 'Protected' : 'Protect'}</span></button>
+      <button class="btn sm ${s.is_current ? 'primary' : 'ghost'}" data-act="current"><i data-lucide="map-pin"></i><span>${s.is_current ? 'Current' : 'Set Current'}</span></button>
+      <button class="btn sm" data-act="detail"><i data-lucide="info"></i><span>Details</span></button>
+      <button class="btn sm danger" data-act="force"><i data-lucide="power"></i><span>Force Logout</span></button>
+      <button class="btn sm ghost" data-act="delete"><i data-lucide="trash-2"></i></button>
     </div>
   </div>`;
 }
@@ -217,12 +246,12 @@ async function handleAction(act, id) {
       toast('Updated', 'ok'); loadSessions();
     }
     if (act === 'force') {
-      if (!confirm(`Logout ALL devices on ${s.phone}? The session_string for this account will be invalidated.`)) return;
+      if (!confirm(`Logout ALL other devices on ${s.phone}?\n\nThe current session (used by Manager) is kept. All other devices on this account will be logged out.`)) return;
       const r = await api(`/api/sessions/${id}/force-logout`, { method: 'POST' });
       toast(`Logged out ${r.killed || 0} devices`, 'ok');
     }
     if (act === 'delete') {
-      if (!confirm('Delete this session from Manager? (DB row only — does not logout Telegram)')) return;
+      if (!confirm('Delete this session from Manager?\n(DB row only — does not logout Telegram)')) return;
       await api(`/api/sessions/${id}`, { method: 'DELETE' });
       toast('Deleted', 'ok'); loadSessions();
     }
@@ -232,21 +261,29 @@ async function handleAction(act, id) {
 /* ---------- devices ---------- */
 async function openDevices(id, s) {
   $('#dev-phone').textContent = s.phone || s.name;
-  $('#dev-body').innerHTML = `<div class="muted">Loading devices…</div>`;
+  $('#dev-body').innerHTML = `<div class="muted" style="padding:12px 0"><i data-lucide="loader-2" style="animation:spin 1s linear infinite;display:inline-block;vertical-align:-3px;width:14px;height:14px"></i> Loading devices…</div>`;
   openModal('modal-devices');
   try {
     const r = await api(`/api/sessions/${id}/devices`);
     if (!r.devices || !r.devices.length) {
-      $('#dev-body').innerHTML = `<div class="muted">No devices found.</div>`;
+      $('#dev-body').innerHTML = `<div class="muted" style="padding:12px 0">No devices found.</div>`;
+      renderIcons();
       return;
     }
     $('#dev-body').innerHTML = r.devices.map(d => `
       <div class="dev-row">
         <div class="dev-info">
-          <div class="dev-name">${d.app_name || 'Unknown'} ${d.is_current ? '<span class="badge blue">This session</span>' : ''}</div>
-          <div class="dev-meta">${d.device_model || ''} · ${d.platform || ''} · ${d.system_version || ''}<br>${d.ip || '—'} · ${d.country || '—'} · active ${fmtRelative(d.date_active ? new Date(d.date_active).getTime() / 1000 : 0)}</div>
+          <div class="dev-name">
+            ${d.is_current ? '<span class="badge blue"><span class="dot"></span>This session</span>' : ''}
+            ${d.app_name || 'Unknown app'}
+          </div>
+          <div class="dev-meta">
+            <i data-lucide="smartphone"></i> ${d.device_model || '—'} · ${d.platform || ''} ${d.system_version || ''}<br>
+            <i data-lucide="globe"></i> ${d.ip || '—'} · ${d.country || '—'}<br>
+            <i data-lucide="clock"></i> Active ${fmtRelative(d.date_active ? new Date(d.date_active).getTime() / 1000 : 0)}
+          </div>
         </div>
-        ${d.is_current ? '' : `<button class="btn sm danger" data-hash="${d.hash}">Logout</button>`}
+        ${d.is_current ? '<span class="badge">Kept</span>' : `<button class="btn sm danger" data-hash="${d.hash}"><i data-lucide="log-out"></i><span>Logout</span></button>`}
       </div>
     `).join('');
     $$('#dev-body button[data-hash]').forEach(b => b.onclick = async () => {
@@ -256,14 +293,18 @@ async function openDevices(id, s) {
         openDevices(id, s);
       } catch (e) { toast(e.message, 'err'); }
     });
-  } catch (e) { $('#dev-body').innerHTML = `<div class="err">${e.message}</div>`; }
+    renderIcons();
+  } catch (e) {
+    $('#dev-body').innerHTML = `<div class="err" style="padding:8px 0">${e.message}</div>`;
+    renderIcons();
+  }
 }
 
 $('#btn-logout-others').onclick = async () => {
   const phone = $('#dev-phone').textContent;
   const s = sessionsCache.find(x => x.phone === phone || x.name === phone);
   if (!s) return;
-  if (!confirm('Logout ALL other devices on this account?')) return;
+  if (!confirm('Logout ALL other devices on this account?\n\nThe current session used by Manager will be kept.')) return;
   try {
     const r = await api(`/api/sessions/${s.id}/logout-others`, { method: 'POST' });
     toast(`Logged out ${r.killed || 0} devices`, 'ok');
@@ -284,11 +325,11 @@ async function open2FA(id, s) {
   try {
     const r = await api(`/api/sessions/${id}/2fa-status`);
     if (r.error) {
-      $('#fa-status').textContent = 'Could not fetch 2FA status: ' + r.error;
+      $('#fa-status').innerHTML = `<span class="badge red">Error</span> ${r.error}`;
     } else {
       $('#fa-status').innerHTML = r.has_2fa
-        ? `<span class="badge yellow">2FA enabled</span> hint: ${r.hint || '—'} · recovery: ${r.has_recovery ? 'yes' : 'no'}`
-        : `<span class="badge green">No 2FA yet</span>`;
+        ? `<span class="badge yellow"><span class="dot"></span>2FA enabled</span> &nbsp;Hint: ${r.hint || '—'} · Recovery: ${r.has_recovery ? 'yes' : 'no'}`
+        : `<span class="badge green"><span class="dot"></span>No 2FA set</span>`;
     }
   } catch (e) { $('#fa-status').textContent = 'Status check failed: ' + e.message; }
 }
@@ -347,9 +388,9 @@ async function openDetail(id) {
       <div class="dl">${rows.map(r => `<div class="k">${r[0]}</div><div class="v">${r[1]}</div>`).join('')}</div>
       <div class="label">Notes</div>
       <textarea id="d-notes" class="input" rows="3">${s.notes || ''}</textarea>
-      <button class="btn sm" id="d-save-notes" style="margin-top:6px">Save notes</button>
+      <button class="btn sm" id="d-save-notes" style="margin-top:6px"><i data-lucide="save"></i><span>Save notes</span></button>
       <div class="label" style="margin-top:14px">Session String</div>
-      <div class="copy-box"><button class="btn sm ghost" id="d-copy">Copy</button>${s.session_string || '—'}</div>
+      <div class="copy-box"><button class="btn sm ghost" id="d-copy"><i data-lucide="copy"></i></button>${s.session_string || '—'}</div>
     `;
     openModal('modal-detail');
     $('#d-copy').onclick = () => { navigator.clipboard.writeText(s.session_string || ''); toast('Copied', 'ok'); };
@@ -359,8 +400,119 @@ async function openDetail(id) {
         toast('Saved', 'ok');
       } catch (e) { toast(e.message, 'err'); }
     };
+    renderIcons();
   } catch (e) { toast(e.message, 'err'); }
 }
+
+/* ---------- bots ---------- */
+async function loadBots() {
+  try {
+    botsCache = await api('/api/bots');
+    renderBots();
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+function renderBots() {
+  if (!botsCache.length) {
+    $('#bot-list').innerHTML = `<div class="empty"><i data-lucide="bot"></i><div>No bots yet. Click "Add Bot" to start a new one.</div></div>`;
+    renderIcons();
+    return;
+  }
+  $('#bot-list').innerHTML = botsCache.map(b => botCardHTML(b)).join('');
+  bindBotActions();
+  renderIcons();
+}
+
+function botCardHTML(b) {
+  const status = b.status || {};
+  const running = status.running;
+  return `
+  <div class="scard" data-bot="${b.id}">
+    <div class="scard-top">
+      <div class="scard-id">
+        <div class="avatar" style="background:linear-gradient(135deg,#3b82f6,#1e40af)"><i data-lucide="bot" style="width:18px;height:18px;color:#fff"></i></div>
+        <div>
+          <div class="scard-name">${b.name} ${b.is_primary ? '<span class="badge blue" style="margin-left:4px">Primary</span>' : ''}</div>
+          <div class="scard-phone">${b.bot_token_masked}</div>
+        </div>
+      </div>
+      <div class="badges">
+        <span class="badge ${running ? 'green' : 'red'}"><span class="dot"></span>${running ? 'Online' : 'Off'}</span>
+        ${b.enabled ? '' : '<span class="badge">Disabled</span>'}
+      </div>
+    </div>
+    <div class="scard-meta">
+      <span class="item"><i data-lucide="contact"></i> ${status.contacts_count || 0} contacts</span>
+      <span class="item"><i data-lucide="message-square"></i> ${status.messages_received || 0} messages</span>
+      <span class="item"><i data-lucide="clock"></i> ${status.started_at ? 'up ' + fmtRelative(status.started_at) : '—'}</span>
+      <span class="item"><i data-lucide="eye"></i> ${status.last_seen ? fmtRelative(status.last_seen) : '—'}</span>
+      ${status.last_error ? `<span class="item" style="color:var(--red)"><i data-lucide="alert-triangle"></i> ${status.last_error}</span>` : ''}
+    </div>
+    <div class="scard-actions">
+      <button class="btn sm" data-bact="restart"><i data-lucide="refresh-cw"></i><span>Restart</span></button>
+      <button class="btn sm ${b.enabled ? 'ghost' : 'primary'}" data-bact="toggle"><i data-lucide="power"></i><span>${b.enabled ? 'Disable' : 'Enable'}</span></button>
+      ${b.is_primary ? '' : `<button class="btn sm ghost" data-bact="primary"><i data-lucide="star"></i><span>Set Primary</span></button>`}
+      ${b.is_primary ? '<span class="badge" style="margin-left:auto">Cannot delete primary</span>' : `<button class="btn sm danger" data-bact="delete"><i data-lucide="trash-2"></i></button>`}
+    </div>
+  </div>`;
+}
+
+function bindBotActions() {
+  $$('.scard[data-bot]').forEach(card => {
+    const id = +card.dataset.bot;
+    $$('button[data-bact]', card).forEach(btn => {
+      btn.onclick = () => handleBotAction(btn.dataset.bact, id);
+    });
+  });
+}
+
+async function handleBotAction(act, id) {
+  const b = botsCache.find(x => x.id === id);
+  if (!b) return;
+  try {
+    if (act === 'restart') {
+      const r = await api(`/api/bots/${id}/restart`, { method: 'POST' });
+      toast(r.ok ? 'Restarted' : (r.message || 'Failed'), r.ok ? 'ok' : 'err');
+      setTimeout(loadBots, 800);
+    }
+    if (act === 'toggle') {
+      await api(`/api/bots/${id}/toggle`, { method: 'POST', body: JSON.stringify({ enabled: !b.enabled }) });
+      toast(b.enabled ? 'Disabled' : 'Enabled', 'ok');
+      setTimeout(loadBots, 500);
+    }
+    if (act === 'primary') {
+      if (!confirm(`Make "${b.name}" the primary bot?`)) return;
+      await api(`/api/bots/${id}/primary`, { method: 'POST' });
+      toast('Set as primary', 'ok');
+      loadBots();
+    }
+    if (act === 'delete') {
+      if (!confirm(`Delete bot "${b.name}"?`)) return;
+      await api(`/api/bots/${id}`, { method: 'DELETE' });
+      toast('Deleted', 'ok');
+      loadBots();
+    }
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+$('#btn-add-bot').onclick = () => {
+  $('#addbot-name').value = '';
+  $('#addbot-token').value = '';
+  $('#addbot-err').textContent = '';
+  openModal('modal-addbot');
+};
+
+$('#btn-confirm-addbot').onclick = async () => {
+  const name = $('#addbot-name').value.trim();
+  const token = $('#addbot-token').value.trim();
+  if (!name || !token) { $('#addbot-err').textContent = 'Name and token required'; return; }
+  try {
+    await api('/api/bots', { method: 'POST', body: JSON.stringify({ name, bot_token: token }) });
+    toast('Bot added', 'ok');
+    closeModal('modal-addbot');
+    loadBots();
+  } catch (e) { $('#addbot-err').textContent = e.message; }
+};
 
 /* ---------- audit ---------- */
 async function loadAudit() {
@@ -368,7 +520,8 @@ async function loadAudit() {
     const rows = await api('/api/audit?limit=100');
     $('#audit-list').innerHTML = rows.length
       ? rows.map(r => `<div class="audit-row"><div class="ts">${fmtTs(r.ts)}</div><div class="act">${r.action}</div><div class="det">${r.phone || '—'} ${r.detail || ''}</div></div>`).join('')
-      : `<div class="muted" style="padding:20px;text-align:center">No activity yet.</div>`;
+      : `<div class="empty"><i data-lucide="inbox"></i><div>No activity yet.</div></div>`;
+    renderIcons();
   } catch (e) { toast(e.message, 'err'); }
 }
 
@@ -382,6 +535,7 @@ async function loadSettings() {
     $('#set-api-hash').value = s.api_hash || '';
     $('#set-bot-token').value = s.bot_token || '';
     $('#set-log-channel').value = s.log_channel_id || '';
+    renderIcons();
   } catch (e) { toast(e.message, 'err'); }
 }
 
@@ -416,14 +570,16 @@ $('#btn-export').onclick = async () => {
 
 /* ---------- init ---------- */
 (async function init() {
+  renderIcons();
   const me = await api('/api/me').catch(() => ({ admin: false }));
   if (!me.admin) location.href = '/';
   else switchView('dashboard');
 })();
 
-// auto refresh every 30s on dashboard/sessions
+// auto refresh
 setInterval(() => {
   const v = $('.nav-item.active')?.dataset.view;
   if (v === 'dashboard') loadDashboard();
   else if (v === 'sessions') loadSessions();
+  else if (v === 'bots') loadBots();
 }, 30000);

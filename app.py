@@ -35,7 +35,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 MINIAPP_DIR = os.path.join(STATIC_DIR, "miniapp")
 SECRET_KEY_FILE = os.path.join(BASE_DIR, ".secret_key")
-BOT_SESSION = os.path.join(BASE_DIR, "bot_session")
+BOTS_SESSION_DIR = os.path.join(BASE_DIR, "bot_sessions")
 PORT = int(os.getenv("PORT", "5000"))
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -389,14 +389,39 @@ def api_settings_save():
         db.set_setting("auto_logout_hours", str(int(body["auto_logout_hours"])))
     if body.get("admin_password"):
         db.set_setting("admin_password", body["admin_password"])
+    env_updates = {}
     if "api_id" in body:
-        db.set_setting("api_id", str(body["api_id"]))
+        v = str(body["api_id"])
+        db.set_setting("api_id", v)
+        env_updates["API_ID"] = v
     if "api_hash" in body:
-        db.set_setting("api_hash", str(body["api_hash"]))
+        v = str(body["api_hash"])
+        db.set_setting("api_hash", v)
+        env_updates["API_HASH"] = v
     if "bot_token" in body:
-        db.set_setting("bot_token", str(body["bot_token"]))
+        new_token = str(body["bot_token"]).strip()
+        old_token = db.get_setting("bot_token") or ""
+        # update primary bot's token in DB
+        primary = db.get_primary_bot()
+        if primary:
+            db.update_bot(primary["id"], {"bot_token": new_token})
+        db.set_setting("bot_token", new_token)
+        env_updates["BOT_TOKEN"] = new_token
+        # if token changed and primary exists, restart it (BotManager wipes stale session file)
+        if new_token != old_token and primary:
+            api_id = db.get_setting("api_id")
+            api_hash = db.get_setting("api_hash")
+            if api_id and api_hash and primary["session_file"]:
+                telegram_bot.bot_manager.restart(
+                    primary["id"], primary["name"], new_token, api_id, api_hash, primary["session_file"]
+                )
+                db.audit(None, None, "primary_bot_token_changed", "restarted primary bot")
     if "log_channel_id" in body:
-        db.set_setting("log_channel_id", str(body["log_channel_id"]))
+        v = str(body["log_channel_id"])
+        db.set_setting("log_channel_id", v)
+        env_updates["LOG_CHANNEL_ID"] = v
+    if env_updates:
+        _update_env_file(env_updates)
     return jsonify({"ok": True})
 
 
@@ -416,6 +441,10 @@ def api_dashboard():
     rows = db.list_sessions()
     now = int(time.time())
     today = now - 86400
+    statuses = telegram_bot.bot_manager.all_status()
+    bots_running = sum(1 for s in statuses.values() if s["running"])
+    bots_total = len(statuses)
+    contacts_total = sum(s.get("contacts_count", 0) for s in statuses.values())
     return jsonify(
         {
             "total": len(rows),
@@ -426,7 +455,10 @@ def api_dashboard():
                 1 for r in rows if r["auto_logout_at"] and not r["auto_logout_fired"] and r["auto_logout_at"] > now
             ),
             "auto_logout_enabled": db.get_setting("auto_logout_enabled") == "1",
-            "bot_running": telegram_bot._bot_thread is not None and telegram_bot._bot_thread.is_alive(),
+            "bots_total": bots_total,
+            "bots_running": bots_running,
+            "bot_running": bots_running > 0,
+            "contacts_total": contacts_total,
             "miniapp_url": (os.getenv("MINI_APP_URL", "") or "").rstrip("/") + "/m/",
         }
     )
@@ -440,13 +472,138 @@ def api_export():
     return jsonify([dict(r) for r in rows])
 
 
+# =================== BOTS ===================
+def _bot_row_to_dict(r, status=None):
+    return {
+        "id": r["id"],
+        "name": r["name"],
+        "bot_token": r["bot_token"],
+        "bot_token_masked": _mask_token(r["bot_token"]),
+        "api_id": r["api_id"] or "",
+        "api_hash": r["api_hash"] or "",
+        "session_file": r["session_file"],
+        "enabled": bool(r["enabled"]),
+        "is_primary": bool(r["is_primary"]),
+        "created_at": r["created_at"],
+        "last_seen": r["last_seen"],
+        "status": status or {},
+    }
+
+
+def _mask_token(t):
+    if not t or len(t) < 12:
+        return "***"
+    return t[:6] + "…" + t[-4:]
+
+
+@app.route("/api/bots")
+@admin_required
+def api_bots_list():
+    rows = db.list_bots()
+    statuses = telegram_bot.bot_manager.all_status()
+    out = []
+    for r in rows:
+        st = statuses.get(r["id"], {})
+        out.append(_bot_row_to_dict(r, st))
+    return jsonify(out)
+
+
+@app.route("/api/bots", methods=["POST"])
+@admin_required
+def api_bots_add():
+    body = request.json or {}
+    name = (body.get("name") or "").strip()
+    token = (body.get("bot_token") or "").strip()
+    if not name or not token:
+        return jsonify({"error": "name and bot_token required"}), 400
+    api_id = db.get_setting("api_id")
+    api_hash = db.get_setting("api_hash")
+    if not api_id or not api_hash:
+        return jsonify({"error": "Set API_ID/API_HASH first"}), 400
+    if db.get_bot_by_token(token):
+        return jsonify({"error": "This bot token is already added"}), 400
+    row = db.insert_bot(name, token, api_id=api_id, api_hash=api_hash, is_primary=False)
+    session_file = os.path.join(BOTS_SESSION_DIR, f"bot_{row['id']}")
+    db.update_bot(row["id"], {"session_file": session_file})
+    row = db.get_bot(row["id"])
+    ok, msg = telegram_bot.bot_manager.start(
+        row["id"], row["name"], row["bot_token"], api_id, api_hash, session_file
+    )
+    if not ok:
+        return jsonify({"error": msg}), 400
+    return jsonify({"ok": True, "id": row["id"]})
+
+
+@app.route("/api/bots/<int:bot_id>", methods=["DELETE"])
+@admin_required
+def api_bots_delete(bot_id):
+    row = db.get_bot(bot_id)
+    if not row:
+        return jsonify({"error": "not found"}), 404
+    if row["is_primary"]:
+        return jsonify({"error": "Cannot delete primary bot"}), 400
+    telegram_bot.bot_manager.remove(bot_id)
+    db.delete_bot(bot_id)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/bots/<int:bot_id>/toggle", methods=["POST"])
+@admin_required
+def api_bots_toggle(bot_id):
+    row = db.get_bot(bot_id)
+    if not row:
+        return jsonify({"error": "not found"}), 404
+    enable = bool((request.json or {}).get("enabled", True))
+    db.update_bot(bot_id, {"enabled": 1 if enable else 0})
+    if enable:
+        api_id = row["api_id"] or db.get_setting("api_id")
+        api_hash = row["api_hash"] or db.get_setting("api_hash")
+        ok, msg = telegram_bot.bot_manager.start(
+            row["id"], row["name"], row["bot_token"], api_id, api_hash, row["session_file"]
+        )
+        if not ok:
+            return jsonify({"error": msg}), 400
+    else:
+        telegram_bot.bot_manager.stop(bot_id)
+    return jsonify({"ok": True, "enabled": enable})
+
+
+@app.route("/api/bots/<int:bot_id>/restart", methods=["POST"])
+@admin_required
+def api_bots_restart(bot_id):
+    row = db.get_bot(bot_id)
+    if not row:
+        return jsonify({"error": "not found"}), 404
+    api_id = row["api_id"] or db.get_setting("api_id")
+    api_hash = row["api_hash"] or db.get_setting("api_hash")
+    ok, msg = telegram_bot.bot_manager.restart(
+        row["id"], row["name"], row["bot_token"], api_id, api_hash, row["session_file"]
+    )
+    db.audit(None, None, "bot_restarted", f"id={bot_id} name={row['name']} ok={ok}")
+    return jsonify({"ok": ok, "message": msg})
+
+
+@app.route("/api/bots/<int:bot_id>/primary", methods=["POST"])
+@admin_required
+def api_bots_primary(bot_id):
+    row = db.get_bot(bot_id)
+    if not row:
+        return jsonify({"error": "not found"}), 404
+    db.set_primary_bot(bot_id)
+    return jsonify({"ok": True})
+
+
 # =================== MINIAPP BOT API ===================
 @app.route("/api/bot/health")
 def api_bot_health():
+    statuses = telegram_bot.bot_manager.all_status()
+    running = sum(1 for s in statuses.values() if s["running"])
     return jsonify(
         {
             "status": "ok",
-            "bot_running": telegram_bot._bot_thread is not None and telegram_bot._bot_thread.is_alive(),
+            "bots_total": len(statuses),
+            "bots_running": running,
+            "bot_running": running > 0,
             "api_creds_set": bool(db.get_setting("api_id") and db.get_setting("api_hash")),
         }
     )
@@ -509,12 +666,39 @@ def api_verify_code():
 
     def on_log(msg):
         if channel_id:
-            telegram_bot.send_to_channel(channel_id, msg)
+            telegram_bot.bot_manager.send_via_any_running(channel_id, msg)
 
     return jsonify(telegram_login.verify(sid, code, password, int(api_id), api_hash, on_success=on_success, on_log=on_log))
 
 
 # =================== MAIN ===================
+def _update_env_file(updates):
+    """Write updated keys back to .env so UI and .env stay in sync."""
+    env_path = os.path.join(BASE_DIR, ".env")
+    if not os.path.exists(env_path):
+        return
+    lines = []
+    found = {k: False for k in updates}
+    try:
+        with open(env_path) as f:
+            for line in f:
+                stripped = line.strip()
+                for k, v in updates.items():
+                    if stripped.startswith(f"{k}="):
+                        lines.append(f"{k}={v}\n")
+                        found[k] = True
+                        break
+                else:
+                    lines.append(line)
+        for k, v in updates.items():
+            if not found[k]:
+                lines.append(f"{k}={v}\n")
+        with open(env_path, "w") as f:
+            f.writelines(lines)
+    except Exception as e:
+        logger.warning(f"Could not update .env: {e}")
+
+
 def _sync_env_to_db():
     """If .env has values that the DB doesn't, copy them in. UI changes always win."""
     mapping = {
@@ -530,21 +714,66 @@ def _sync_env_to_db():
             db.set_setting(db_key, env_val)
 
 
+def _sync_primary_bot():
+    """Ensure the .env bot_token exists as the primary bot in the bots table.
+
+    If .env has no bot_token, do nothing.
+    If the DB already has a primary bot with the same token, no-op.
+    If .env's bot_token differs from the DB primary's token, update it.
+    If no primary exists, create one.
+    """
+    env_token = (os.getenv("BOT_TOKEN", "") or "").strip()
+    if not env_token:
+        return
+    api_id = db.get_setting("api_id")
+    api_hash = db.get_setting("api_hash")
+    session_file = os.path.join(BOTS_SESSION_DIR, "bot_primary")
+
+    primary = db.get_primary_bot()
+    if primary:
+        if primary["bot_token"] != env_token:
+            # token changed in .env → update + restart (BotManager wipes stale session)
+            db.update_bot(primary["id"], {"bot_token": env_token, "name": "Primary", "api_id": api_id, "api_hash": api_hash, "session_file": session_file})
+            db.audit(None, None, "primary_bot_token_changed", "from .env on startup")
+        else:
+            # ensure session_file is set (older installs may not have it)
+            if not primary["session_file"]:
+                db.update_bot(primary["id"], {"session_file": session_file, "api_id": api_id, "api_hash": api_hash})
+    else:
+        # create primary bot
+        db.insert_bot("Primary", env_token, api_id=api_id, api_hash=api_hash, is_primary=True, session_file=session_file)
+
+
+def _start_all_bots():
+    """Start every enabled bot in the DB."""
+    os.makedirs(BOTS_SESSION_DIR, exist_ok=True)
+    for row in db.list_bots():
+        if not row["enabled"]:
+            continue
+        api_id = row["api_id"] or db.get_setting("api_id")
+        api_hash = row["api_hash"] or db.get_setting("api_hash")
+        if not api_id or not api_hash or not row["session_file"]:
+            logger.warning(f"[bot {row['id']}] missing api_id/api_hash/session_file — skipping")
+            continue
+        ok, msg = telegram_bot.bot_manager.start(
+            row["id"], row["name"], row["bot_token"], api_id, api_hash, row["session_file"]
+        )
+        if ok:
+            logger.info(f"[bot {row['id']}] '{row['name']}' started")
+        else:
+            logger.warning(f"[bot {row['id']}] '{row['name']}' not started: {msg}")
+
+
 if __name__ == "__main__":
     db.init_db()
     _sync_env_to_db()
+    _sync_primary_bot()
+    _start_all_bots()
     auto_logout.start()
 
-    bot_token = db.get_setting("bot_token")
-    api_id = db.get_setting("api_id")
-    api_hash = db.get_setting("api_hash")
-    if bot_token and api_id and api_hash:
-        telegram_bot.start_in_background(bot_token, int(api_id), api_hash, session_file=BOT_SESSION)
-        logger.info("Bot thread started")
-    else:
-        logger.warning("Bot not started — set BOT_TOKEN + API_ID + API_HASH in .env (or Settings)")
-
-    logger.info(f"Manager running on http://0.0.0.0:{PORT}")
+    statuses = telegram_bot.bot_manager.all_status()
+    running = sum(1 for s in statuses.values() if s["running"])
+    logger.info(f"Manager running on http://0.0.0.0:{PORT}  ({running}/{len(statuses)} bots online)")
     logger.info(f"  Manager UI:  http://localhost:{PORT}/")
     logger.info(f"  Miniapp URL: http://localhost:{PORT}/m/  (set this in BotFather as the Web App URL)")
     app.run(host="0.0.0.0", port=PORT, debug=False, threaded=True)
