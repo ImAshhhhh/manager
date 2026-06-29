@@ -5,5 +5,8 @@ manager.db
 manager.db-wal
 manager.db-shm
 .env
+.secret_key
+bot_session*
 app.log
 cf_tunnel.log
+cf_manager.log
