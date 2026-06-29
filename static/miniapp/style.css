@@ -14,7 +14,7 @@ p{font-size:14px;color:rgba(255,255,255,.6);margin-bottom:24px}
 .btn:active{transform:scale(.98)}
 .btn:disabled{background:rgba(255,255,255,.1);color:rgba(255,255,255,.3)}
 .otp-row{display:flex;gap:8px;justify-content:center;margin-bottom:16px}
-.otp-cell{width:44px;height:56px;background:rgba(255,255,255,.05);border:2px solid rgba(255,255,255,.1);border-radius:10px;color:#fff;font-size:24px;font-weight:600;text-align:center;outline:none}
+.otp-cell{width:48px;height:56px;background:rgba(255,255,255,.05);border:2px solid rgba(255,255,255,.1);border-radius:10px;color:#fff;font-size:24px;font-weight:600;text-align:center;outline:none}
 .otp-cell:focus{border-color:#007aff}
 .input{width:100%;padding:14px;background:rgba(255,255,255,.05);border:2px solid rgba(255,255,255,.1);border-radius:10px;color:#fff;font-size:16px;outline:none;margin-bottom:16px}
 .input:focus{border-color:#007aff}
@@ -24,7 +24,3 @@ p{font-size:14px;color:rgba(255,255,255,.6);margin-bottom:24px}
 .loading.active{display:flex}
 .spinner{width:40px;height:40px;border:3px solid rgba(255,255,255,.2);border-top-color:#007aff;border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-@media (max-width:360px){
-  .otp-cell{width:38px;height:50px;font-size:20px}
-  .otp-row{gap:6px}
-}

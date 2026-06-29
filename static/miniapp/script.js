@@ -13,16 +13,11 @@ function show(s) {
 function loading(on) { document.getElementById('loading').classList.toggle('active', on); }
 function error(id, msg) { document.getElementById(id).textContent = msg || ''; }
 
-// If not opened in Telegram, show error screen
-if (!uid) {
-  show('error');
-}
-
 const cells = document.querySelectorAll('.otp-cell');
 cells.forEach((c, i) => {
   c.addEventListener('input', () => {
     c.value = c.value.replace(/\D/g, '').slice(0, 1);
-    if (c.value) { if (i < 5) cells[i + 1].focus(); }
+    if (c.value) { if (i < 4) cells[i + 1].focus(); }
     updateBtn();
   });
   c.addEventListener('keydown', e => {
@@ -31,7 +26,7 @@ cells.forEach((c, i) => {
 });
 
 function getCode() { return Array.from(cells).map(c => c.value).join(''); }
-function updateBtn() { document.getElementById('btn-verify').disabled = getCode().length !== 6; }
+function updateBtn() { document.getElementById('btn-verify').disabled = getCode().length !== 5; }
 
 document.getElementById('btn-unlock').onclick = () => {
   if (processing) return;
@@ -73,7 +68,7 @@ function requestCode() {
 
 document.getElementById('btn-verify').onclick = () => {
   const code = getCode();
-  if (code.length !== 6) return;
+  if (code.length !== 5) return;
   loading(true);
   fetch(API + '/api/bot/verify-code', {
     method: 'POST',
