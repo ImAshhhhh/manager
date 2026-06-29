@@ -109,7 +109,11 @@ echo -e "${GREEN}======================================${NC}"
 echo -e "  ${BLUE}Local:${NC}   http://localhost:$PORT"
 [ -n "$CF_URL" ] && echo -e "  ${BLUE}Public:${NC}  $CF_URL"
 echo -e "  ${BLUE}Logs:${NC}    tail -f $APP_DIR/app.log"
-echo -e "  ${BLUE}Stop:${NC}    pkill -f 'python.*app.py'${([ "$USE_TUNNEL" = "1" ] && echo ' && pkill cloudflared')}"
+if [ "$USE_TUNNEL" = "1" ]; then
+  echo -e "  ${BLUE}Stop:${NC}    pkill -f 'python.*app.py' && pkill cloudflared"
+else
+  echo -e "  ${BLUE}Stop:${NC}    pkill -f 'python.*app.py'"
+fi
 echo -e "  ${BLUE}Default admin password:${NC} manager123  (change in Settings)"
 echo ""
 
