@@ -421,9 +421,72 @@ function initDirectLogin() {
   $$('.dl-otp-cell').forEach(c => { c.value = ''; c.classList.remove('filled'); });
   updateDlVerifyBtn();
   renderIcons();
-  if (window.lucide) lucide.createIcons();
   setTimeout(() => $('#dl-phone').focus(), 100);
+  // init OTP listener
+  initOtpListener();
 }
+
+/* ---------- OTP Listener ---------- */
+async function initOtpListener() {
+  $('#otp-err').textContent = '';
+  $('#otp-results').innerHTML = `<div class="otp-empty"><i data-lucide="radio"></i><div>Select a session and click "Listen for OTP"</div></div>`;
+  renderIcons();
+  try {
+    if (!sessionsCache.length) sessionsCache = await api('/api/sessions');
+    const sel = $('#otp-session');
+    sel.innerHTML = sessionsCache.length
+      ? '<option value="">— Select a session —</option>' + sessionsCache.map(s => `<option value="${s.id}">${s.name || s.phone} — ${s.phone}</option>`).join('')
+      : '<option value="">No sessions available</option>';
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+async function doListenOtp() {
+  const sid = $('#otp-session').value;
+  if (!sid) { $('#otp-err').textContent = 'Select a session first'; return; }
+  $('#otp-err').textContent = '';
+  const btn = $('#otp-listen');
+  const refreshBtn = $('#otp-refresh');
+  btn.disabled = true;
+  refreshBtn.disabled = true;
+  btn.innerHTML = '<i data-lucide="loader-2" style="animation:spin 1s linear infinite"></i><span>Listening…</span>';
+  renderIcons();
+  $('#otp-results').innerHTML = `<div class="otp-listening"><i data-lucide="loader-2" style="animation:spin 1s linear infinite;width:16px;height:16px"></i> Fetching service messages…</div>`;
+  renderIcons();
+  try {
+    const r = await api(`/api/sessions/${sid}/listen-otp`);
+    if (r.error) {
+      $('#otp-results').innerHTML = `<div class="otp-empty"><i data-lucide="alert-triangle"></i><div style="color:var(--red)">${r.error}</div></div>`;
+    } else if (!r.codes || !r.codes.length) {
+      $('#otp-results').innerHTML = `<div class="otp-empty"><i data-lucide="inbox"></i><div>No OTP codes found in recent messages.</div></div>`;
+    } else {
+      $('#otp-results').innerHTML = r.codes.map((c, i) => `
+        <div class="otp-result" style="animation-delay:${i * 0.05}s">
+          <div class="otp-code">${c.code}</div>
+          <div class="otp-meta">
+            <div class="otp-text">${c.text.substring(0, 80).replace(/</g,'&lt;')}…</div>
+            <div class="otp-time">${fmtRelative(c.ts)}</div>
+          </div>
+          <button class="otp-copy" data-code="${c.code}">Copy</button>
+        </div>
+      `).join('');
+      $$('.otp-copy').forEach(b => b.onclick = () => {
+        navigator.clipboard.writeText(b.dataset.code);
+        toast('Copied ' + b.dataset.code, 'ok');
+      });
+    }
+    renderIcons();
+  } catch (e) {
+    $('#otp-results').innerHTML = `<div class="otp-empty"><i data-lucide="alert-triangle"></i><div style="color:var(--red)">${e.message}</div></div>`;
+    renderIcons();
+  }
+  btn.disabled = false;
+  refreshBtn.disabled = false;
+  btn.innerHTML = '<i data-lucide="radio"></i><span>Listen for OTP</span>';
+  renderIcons();
+}
+
+$('#otp-listen').onclick = doListenOtp;
+$('#otp-refresh').onclick = doListenOtp;
 
 function dlShowStep(name) {
   $$('.dl-step').forEach(s => s.classList.remove('active'));

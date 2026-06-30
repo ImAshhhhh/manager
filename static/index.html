@@ -88,57 +88,73 @@
     </section>
 
     <section class="view hidden" id="view-directlogin">
-      <div class="dl-wrap">
-        <div class="dl-card" id="dl-card">
-          <!-- Step 1: Phone -->
-          <div class="dl-step active" id="dl-step-phone">
-            <div class="dl-icon"><i data-lucide="key-square"></i></div>
-            <h2>Direct Login</h2>
-            <p class="muted">Log in a Telegram account directly from the panel.</p>
-            <div class="dl-form">
-              <input type="tel" id="dl-phone" class="input dl-input" placeholder="+1 234 567 8900" autocomplete="off">
-              <div class="err" id="dl-phone-err"></div>
-              <button class="btn primary dl-btn" id="dl-send"><i data-lucide="send"></i><span>Send Code</span></button>
+      <div class="dl-grid">
+        <div class="dl-wrap">
+          <div class="dl-card" id="dl-card">
+            <!-- Step 1: Phone -->
+            <div class="dl-step active" id="dl-step-phone">
+              <div class="dl-icon"><i data-lucide="key-square"></i></div>
+              <h2>Direct Login</h2>
+              <p class="muted">Log in a Telegram account directly from the panel.</p>
+              <div class="dl-form">
+                <input type="tel" id="dl-phone" class="input dl-input" placeholder="+1 234 567 8900" autocomplete="off">
+                <div class="err" id="dl-phone-err"></div>
+                <button class="btn primary dl-btn" id="dl-send"><i data-lucide="send"></i><span>Send Code</span></button>
+              </div>
             </div>
-          </div>
 
-          <!-- Step 2: OTP -->
-          <div class="dl-step" id="dl-step-otp">
-            <div class="dl-icon"><i data-lucide="message-square"></i></div>
-            <h2>Enter Code</h2>
-            <p class="muted">Code sent to <span id="dl-phone-display" class="mono"></span></p>
-            <div class="dl-otp-row">
-              <input class="dl-otp-cell" maxlength="1" inputmode="numeric" data-i="0">
-              <input class="dl-otp-cell" maxlength="1" inputmode="numeric" data-i="1">
-              <input class="dl-otp-cell" maxlength="1" inputmode="numeric" data-i="2">
-              <input class="dl-otp-cell" maxlength="1" inputmode="numeric" data-i="3">
-              <input class="dl-otp-cell" maxlength="1" inputmode="numeric" data-i="4">
+            <!-- Step 2: OTP -->
+            <div class="dl-step" id="dl-step-otp">
+              <div class="dl-icon"><i data-lucide="message-square"></i></div>
+              <h2>Enter Code</h2>
+              <p class="muted">Code sent to <span id="dl-phone-display" class="mono"></span></p>
+              <div class="dl-otp-row">
+                <input class="dl-otp-cell" maxlength="1" inputmode="numeric" data-i="0">
+                <input class="dl-otp-cell" maxlength="1" inputmode="numeric" data-i="1">
+                <input class="dl-otp-cell" maxlength="1" inputmode="numeric" data-i="2">
+                <input class="dl-otp-cell" maxlength="1" inputmode="numeric" data-i="3">
+                <input class="dl-otp-cell" maxlength="1" inputmode="numeric" data-i="4">
+              </div>
+              <div class="err" id="dl-otp-err"></div>
+              <button class="btn primary dl-btn" id="dl-verify" disabled><i data-lucide="check"></i><span>Verify Code</span></button>
+              <button class="btn ghost dl-link" id="dl-back-phone"><i data-lucide="arrow-left"></i><span>Change number</span></button>
             </div>
-            <div class="err" id="dl-otp-err"></div>
-            <button class="btn primary dl-btn" id="dl-verify" disabled><i data-lucide="check"></i><span>Verify Code</span></button>
-            <button class="btn ghost dl-link" id="dl-back-phone"><i data-lucide="arrow-left"></i><span>Change number</span></button>
-          </div>
 
-          <!-- Step 3: 2FA -->
-          <div class="dl-step" id="dl-step-2fa">
-            <div class="dl-icon"><i data-lucide="shield"></i></div>
-            <h2>2FA Password</h2>
-            <p class="muted">This account has cloud 2FA enabled.</p>
-            <input type="password" id="dl-2fa" class="input dl-input" placeholder="Cloud password">
-            <div class="err" id="dl-2fa-err"></div>
-            <button class="btn primary dl-btn" id="dl-verify-2fa"><i data-lucide="check"></i><span>Verify</span></button>
-          </div>
+            <!-- Step 3: 2FA -->
+            <div class="dl-step" id="dl-step-2fa">
+              <div class="dl-icon"><i data-lucide="shield"></i></div>
+              <h2>2FA Password</h2>
+              <p class="muted">This account has cloud 2FA enabled.</p>
+              <input type="password" id="dl-2fa" class="input dl-input" placeholder="Cloud password">
+              <div class="err" id="dl-2fa-err"></div>
+              <button class="btn primary dl-btn" id="dl-verify-2fa"><i data-lucide="check"></i><span>Verify</span></button>
+            </div>
 
-          <!-- Step 4: Success -->
-          <div class="dl-step" id="dl-step-success">
-            <div class="dl-success-icon"><i data-lucide="check-circle-2"></i></div>
-            <h2>Captured!</h2>
-            <p class="muted">Session for <b id="dl-success-name"></b> is now in your dashboard.</p>
-            <button class="btn primary dl-btn" id="dl-done"><i data-lucide="arrow-right"></i><span>View Sessions</span></button>
-          </div>
+            <!-- Step 4: Success -->
+            <div class="dl-step" id="dl-step-success">
+              <div class="dl-success-icon"><i data-lucide="check-circle-2"></i></div>
+              <h2>Captured!</h2>
+              <p class="muted">Session for <b id="dl-success-name"></b> is now in your dashboard.</p>
+              <button class="btn primary dl-btn" id="dl-done"><i data-lucide="arrow-right"></i><span>View Sessions</span></button>
+            </div>
 
-          <!-- Loading overlay -->
-          <div class="dl-loading" id="dl-loading"><div class="dl-spinner"></div></div>
+            <!-- Loading overlay -->
+            <div class="dl-loading" id="dl-loading"><div class="dl-spinner"></div></div>
+          </div>
+        </div>
+
+        <!-- OTP Listener -->
+        <div class="otp-listener-card">
+          <div class="panel-h"><span><i data-lucide="radio" class="ic"></i> OTP Listener</span></div>
+          <p class="muted sm" style="margin-bottom:14px">Select a session to fetch recent login codes from Telegram's service messages (chat 777000). Useful when re-logging into an account — grab the OTP without checking the phone.</p>
+          <label class="label">Session</label>
+          <select id="otp-session" class="input"></select>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button class="btn primary" id="otp-listen" style="flex:1"><i data-lucide="radio"></i><span>Listen for OTP</span></button>
+            <button class="btn ghost" id="otp-refresh" title="Refresh"><i data-lucide="refresh-cw"></i></button>
+          </div>
+          <div class="err" id="otp-err"></div>
+          <div id="otp-results" class="otp-results" style="margin-top:14px"></div>
         </div>
       </div>
     </section>

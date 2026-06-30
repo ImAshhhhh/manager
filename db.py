@@ -102,7 +102,7 @@ def init_db():
         defaults = {
             "auto_logout_enabled": "0",
             "auto_logout_hours": "24",
-            "admin_password": "manager123",
+            "admin_password": "",  # empty = no auth required (open access)
             "api_id": "",
             "api_hash": "",
             "bot_token": "",

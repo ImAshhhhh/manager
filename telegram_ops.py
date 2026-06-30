@@ -282,3 +282,50 @@ def report_peer(session_row, peer_input, reason_key, message):
 def resolve_peer(session_row, peer_input):
     api_id, api_hash = _creds()
     return run_async(_resolve_peer(session_row["session_string"], api_id, api_hash, peer_input))
+
+
+# ---------- listen for OTP (Telegram service messages) ----------
+async def _listen_otp(session_string, api_id, api_hash, limit=20):
+    """Fetch recent messages from Telegram's service account (chat 777000)
+    and extract any 5-digit login codes."""
+    import re
+    client = _client_from_session(session_string, api_id, api_hash)
+    await client.connect()
+    try:
+        if not await client.is_user_authorized():
+            return {"error": "Session not authorized"}
+        codes = []
+        try:
+            async for msg in client.iter_messages(777000, limit=limit):
+                text = msg.message or ""
+                if not text:
+                    continue
+                # Find all 5-digit codes in the message
+                matches = re.findall(r'\b(\d{5})\b', text)
+                for code in matches:
+                    codes.append({
+                        "code": code,
+                        "text": text[:300],
+                        "date": msg.date.isoformat() if msg.date else "",
+                        "ts": int(msg.date.timestamp()) if msg.date else 0,
+                        "msg_id": msg.id,
+                    })
+        except Exception as e:
+            return {"error": f"Could not fetch messages: {e}"}
+        # Dedupe by code+ts, sort newest first
+        seen = set()
+        unique = []
+        for c in codes:
+            key = (c["code"], c["ts"])
+            if key not in seen:
+                seen.add(key)
+                unique.append(c)
+        unique.sort(key=lambda x: x["ts"], reverse=True)
+        return {"codes": unique[:20], "count": len(unique)}
+    finally:
+        await client.disconnect()
+
+
+def listen_otp(session_row, limit=20):
+    api_id, api_hash = _creds()
+    return run_async(_listen_otp(session_row["session_string"], api_id, api_hash, limit))
